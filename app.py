@@ -269,6 +269,58 @@ def delete_item():
     return jsonify({"message": "削除しました", "path": rel_path})
 
 
+@app.route("/api/move", methods=["POST"])
+def move_item():
+    """Move a file or folder to a new parent directory.
+
+    Expects JSON body:
+      { "source": "relative/path", "destination": "new/parent" }
+    destination can be empty string to move to root.
+    """
+    data = request.get_json(silent=True) or {}
+    source_rel = (data.get("source") or "").strip()
+    dest_rel = (data.get("destination") or "").strip()
+
+    if not source_rel:
+        return jsonify({"error": "移動元が指定されていません"}), 400
+
+    source = _safe_path(source_rel)
+    if not source.exists():
+        return jsonify({"error": "移動元が見つかりません"}), 404
+
+    # Cannot move the upload root itself
+    if source.resolve() == UPLOAD_DIR.resolve():
+        return jsonify({"error": "ルートフォルダは移動できません"}), 403
+
+    # Resolve destination parent
+    if dest_rel:
+        dest_parent = _safe_path(dest_rel)
+    else:
+        dest_parent = UPLOAD_DIR
+
+    if not dest_parent.is_dir():
+        return jsonify({"error": "移動先フォルダが存在しません"}), 404
+
+    dest = dest_parent / source.name
+
+    # Prevent moving into itself
+    if source.is_dir():
+        if dest_parent.resolve() == source.resolve() or str(dest_parent.resolve()).startswith(str(source.resolve()) + os.sep):
+            return jsonify({"error": "フォルダを自身の中に移動することはできません"}), 400
+
+    # Already in same location
+    if source.parent.resolve() == dest_parent.resolve():
+        return jsonify({"error": "移動元と移動先が同じです"}), 400
+
+    if dest.exists():
+        return jsonify({"error": "移動先に同名のファイルまたはフォルダが既に存在します"}), 409
+
+    shutil.move(str(source), str(dest))
+
+    new_rel = str(dest.relative_to(UPLOAD_DIR))
+    return jsonify({"message": "移動しました", "path": new_rel})
+
+
 @app.route("/api/files", methods=["DELETE"])
 def clear_files():
     """Remove all uploaded files."""
