@@ -9,7 +9,6 @@ const App = (() => {
   /* ---- DOM references ---- */
 
   const btnUpload = document.getElementById("btn-upload");
-  const btnClear = document.getElementById("btn-clear");
   const btnTheme = document.getElementById("btn-theme");
   const btnSidebarToggle = document.getElementById("btn-sidebar-toggle");
   const folderInput = document.getElementById("folder-input");
@@ -70,9 +69,6 @@ const App = (() => {
       // Reload tree
       await Tree.load();
 
-      // Show clear button
-      btnClear.classList.remove("hidden");
-
       // Hide progress after a short delay
       setTimeout(() => {
         uploadProgress.classList.add("hidden");
@@ -102,17 +98,34 @@ const App = (() => {
   const folderDialogCancel = document.getElementById("folder-dialog-cancel");
   const folderDialogCreate = document.getElementById("folder-dialog-create");
   const fileUploadInput = document.getElementById("file-upload-input");
+  const btnNewRootFolder = document.getElementById("btn-new-root-folder");
 
-  /** Open the "New Folder" dialog */
+  /** Tracks the parent path for the folder creation dialog */
+  let _folderCreationParent = "";
+
+  /** Open the "New Folder" dialog (from context menu) */
   ctxNewFolder.addEventListener("click", () => {
     Tree.hideContextMenu();
+    _folderCreationParent = Tree.getContextPath();
+    _openFolderDialog();
+  });
+
+  /** Open the "New Folder" dialog (from sidebar footer button – always root) */
+  btnNewRootFolder.addEventListener("click", () => {
+    _folderCreationParent = "";
+    _openFolderDialog();
+  });
+
+  /** Shared helper to show the folder creation dialog */
+  function _openFolderDialog() {
     folderNameInput.value = "";
     folderDialogError.classList.add("hidden");
-    const parentPath = Tree.getContextPath();
-    folderDialogParent.textContent = parentPath ? `作成先: /${parentPath}/` : "作成先: / (ルート)";
+    folderDialogParent.textContent = _folderCreationParent
+      ? `作成先: /${_folderCreationParent}/`
+      : "作成先: / (ルート)";
     folderDialog.classList.remove("hidden");
     setTimeout(() => folderNameInput.focus(), 50);
-  });
+  }
 
   /** Cancel folder dialog */
   folderDialogCancel.addEventListener("click", () => {
@@ -145,7 +158,7 @@ const App = (() => {
       return;
     }
 
-    const parentPath = Tree.getContextPath();
+    const parentPath = _folderCreationParent;
     const fullPath = parentPath ? `${parentPath}/${name}` : name;
 
     try {
@@ -163,7 +176,6 @@ const App = (() => {
 
       folderDialog.classList.add("hidden");
       await Tree.load();
-      btnClear.classList.remove("hidden");
     } catch (err) {
       console.error("Create folder error:", err);
       folderDialogErrorText.textContent = "エラーが発生しました";
@@ -223,7 +235,6 @@ const App = (() => {
       uploadBar.style.width = "100%";
 
       await Tree.load();
-      btnClear.classList.remove("hidden");
 
       setTimeout(() => uploadProgress.classList.add("hidden"), 1500);
     } catch (err) {
@@ -304,31 +315,10 @@ const App = (() => {
 
       await Tree.load();
 
-      // Hide clear button if tree is now empty
-      const hasEntries = document.querySelectorAll("#file-tree .tree-file").length > 0 ||
-                         document.querySelectorAll("#file-tree .tree-dir").length > 0;
-      if (!hasEntries) btnClear.classList.add("hidden");
     } catch (err) {
       console.error("Delete error:", err);
       alert("削除中にエラーが発生しました");
       deleteDialog.classList.add("hidden");
-    }
-  });
-
-  /* ==================================================================
-   *  Clear files
-   * ================================================================== */
-
-  btnClear.addEventListener("click", async () => {
-    if (!confirm("アップロードされたファイルをすべて削除しますか？")) return;
-
-    try {
-      await fetch("/api/files", { method: "DELETE" });
-      await Tree.load();
-      Preview.showWelcome();
-      btnClear.classList.add("hidden");
-    } catch (err) {
-      console.error("Clear error:", err);
     }
   });
 
@@ -419,17 +409,92 @@ const App = (() => {
   }
 
   /* ==================================================================
+   *  Drag & Drop – Move confirmation dialog
+   * ================================================================== */
+
+  const moveDialog = document.getElementById("move-dialog");
+  const moveDialogMsg = document.getElementById("move-dialog-msg");
+  const moveDialogSource = document.getElementById("move-dialog-source");
+  const moveDialogDest = document.getElementById("move-dialog-dest");
+  const moveDialogCancel = document.getElementById("move-dialog-cancel");
+  const moveDialogConfirm = document.getElementById("move-dialog-confirm");
+
+  let _pendingMove = null;
+
+  /** Listen for move-requested events from Tree drag & drop */
+  document.addEventListener("move-requested", (e) => {
+    const { sourcePath, sourceType, sourceName, destPath, destName } = e.detail;
+    _pendingMove = { sourcePath, sourceType, destPath };
+
+    const kind = sourceType === "directory" ? "フォルダ" : "ファイル";
+    moveDialogMsg.innerHTML = `${kind}<strong class="text-gray-900 dark:text-gray-100">「${_escHtml(sourceName)}」</strong>を移動しますか？`;
+    moveDialogSource.textContent = `/${sourcePath}`;
+    moveDialogDest.textContent = destPath ? `/${destPath}/` : "/ (ルート)";
+    moveDialog.classList.remove("hidden");
+  });
+
+  moveDialogCancel.addEventListener("click", () => {
+    moveDialog.classList.add("hidden");
+    _pendingMove = null;
+  });
+
+  moveDialog.addEventListener("click", (e) => {
+    if (e.target === moveDialog || e.target.classList.contains("dialog-overlay")) {
+      moveDialog.classList.add("hidden");
+      _pendingMove = null;
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !moveDialog.classList.contains("hidden")) {
+      moveDialog.classList.add("hidden");
+      _pendingMove = null;
+    }
+  });
+
+  moveDialogConfirm.addEventListener("click", async () => {
+    if (!_pendingMove) return;
+
+    const { sourcePath, sourceType, destPath } = _pendingMove;
+
+    try {
+      const res = await fetch("/api/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: sourcePath, destination: destPath }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "移動に失敗しました");
+        moveDialog.classList.add("hidden");
+        _pendingMove = null;
+        return;
+      }
+
+      moveDialog.classList.add("hidden");
+      _pendingMove = null;
+
+      // If the moved item was the currently previewed file, reset preview
+      const selected = Tree.getSelectedPath();
+      if (selected && (selected === sourcePath || selected.startsWith(sourcePath + "/"))) {
+        Preview.showWelcome();
+      }
+
+      await Tree.load();
+    } catch (err) {
+      console.error("Move error:", err);
+      alert("移動中にエラーが発生しました");
+      moveDialog.classList.add("hidden");
+      _pendingMove = null;
+    }
+  });
+
+  /* ==================================================================
    *  Initial load
    * ================================================================== */
 
   // Load tree on page load (may have persisted uploads from Docker volume)
-  Tree.load().then(() => {
-    // If tree has entries, show clear button
-    const hasEntries = document.querySelectorAll("#file-tree .tree-file").length > 0;
-    if (hasEntries) {
-      btnClear.classList.remove("hidden");
-    }
-  });
+  Tree.load();
 
   return { toggleSidebar };
 })();

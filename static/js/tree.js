@@ -15,6 +15,16 @@ const Tree = (() => {
   /** Type of item targeted by context menu: "directory" | "file" | "root" */
   let _contextType = "root";
 
+  /** Current drag data */
+  let _dragData = null;
+
+  /** Remove all drop-target highlights */
+  function _clearAllDropHighlights() {
+    document.querySelectorAll(".tree-drop-target").forEach(el => el.classList.remove("tree-drop-target"));
+    const treeEl = document.getElementById("file-tree");
+    if (treeEl) treeEl.classList.remove("tree-drop-target-root");
+  }
+
   /* ---- Icon helpers ---- */
 
   const ICONS = {
@@ -48,12 +58,15 @@ const Tree = (() => {
   function _renderDir(node, depth) {
     const wrapper = document.createElement("div");
     wrapper.className = "tree-dir";
+    wrapper.dataset.path = node.path;
+    wrapper.dataset.type = "directory";
 
     // Header row
     const row = document.createElement("div");
     row.className =
       "tree-row flex items-center gap-1.5 px-2 py-[3px] cursor-pointer select-none rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/40 transition-colors";
     row.style.paddingLeft = `${depth * 16 + 8}px`;
+    row.setAttribute("draggable", "true");
     row.innerHTML = `
       <span class="chevron">${ICONS.chevronRight}</span>
       <span class="folder-icon">${ICONS.folderClosed}</span>
@@ -91,6 +104,51 @@ const Tree = (() => {
       _showContextMenu(e.clientX, e.clientY);
     });
 
+    /* ---- Drag & Drop ---- */
+    row.addEventListener("dragstart", (e) => {
+      e.stopPropagation();
+      _dragData = { path: node.path, type: "directory", name: node.name };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", node.path);
+      row.classList.add("tree-dragging");
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("tree-dragging");
+      _clearAllDropHighlights();
+    });
+
+    // This folder is a drop target
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (_dragData && _dragData.path !== node.path) {
+        e.dataTransfer.dropEffect = "move";
+        row.classList.add("tree-drop-target");
+      }
+    });
+    row.addEventListener("dragleave", (e) => {
+      e.stopPropagation();
+      row.classList.remove("tree-drop-target");
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      row.classList.remove("tree-drop-target");
+      if (_dragData && _dragData.path !== node.path) {
+        // Dispatch move-requested event for app.js to handle with confirmation dialog
+        document.dispatchEvent(new CustomEvent("move-requested", {
+          detail: {
+            sourcePath: _dragData.path,
+            sourceType: _dragData.type,
+            sourceName: _dragData.name,
+            destPath: node.path,
+            destName: node.name,
+          }
+        }));
+      }
+      _dragData = null;
+    });
+
     wrapper.appendChild(row);
     wrapper.appendChild(childContainer);
     return wrapper;
@@ -102,6 +160,8 @@ const Tree = (() => {
       "tree-row tree-file flex items-center gap-1.5 px-2 py-[3px] cursor-pointer select-none rounded-md hover:bg-gray-200/60 dark:hover:bg-gray-700/40 transition-colors";
     row.style.paddingLeft = `${depth * 16 + 8 + 20}px`; // extra indent for alignment
     row.dataset.path = node.path;
+    row.dataset.type = "file";
+    row.setAttribute("draggable", "true");
     row.innerHTML = `
       ${_iconForFile(node.name)}
       <span class="truncate text-gray-700 dark:text-gray-300">${_esc(node.name)}</span>
@@ -118,6 +178,19 @@ const Tree = (() => {
       _contextPath = node.path;
       _contextType = "file";
       _showContextMenu(e.clientX, e.clientY);
+    });
+
+    /* ---- Drag (file as source) ---- */
+    row.addEventListener("dragstart", (e) => {
+      e.stopPropagation();
+      _dragData = { path: node.path, type: "file", name: node.name };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", node.path);
+      row.classList.add("tree-dragging");
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("tree-dragging");
+      _clearAllDropHighlights();
     });
 
     return row;
@@ -207,6 +280,41 @@ const Tree = (() => {
           _contextPath = "";
           _contextType = "root";
           _showContextMenu(e.clientX, e.clientY);
+        }
+      });
+
+      /* ---- Drop on root (empty area of tree) ---- */
+      treeEl.addEventListener("dragover", (e) => {
+        // Only handle if the event target is #file-tree itself or #tree-empty
+        if (e.target === treeEl || e.target.id === "tree-empty" || e.target.closest("#tree-empty")) {
+          e.preventDefault();
+          if (_dragData) {
+            e.dataTransfer.dropEffect = "move";
+            treeEl.classList.add("tree-drop-target-root");
+          }
+        }
+      });
+      treeEl.addEventListener("dragleave", (e) => {
+        if (e.target === treeEl || e.target.id === "tree-empty" || e.target.closest("#tree-empty")) {
+          treeEl.classList.remove("tree-drop-target-root");
+        }
+      });
+      treeEl.addEventListener("drop", (e) => {
+        if (e.target === treeEl || e.target.id === "tree-empty" || e.target.closest("#tree-empty")) {
+          e.preventDefault();
+          treeEl.classList.remove("tree-drop-target-root");
+          if (_dragData) {
+            document.dispatchEvent(new CustomEvent("move-requested", {
+              detail: {
+                sourcePath: _dragData.path,
+                sourceType: _dragData.type,
+                sourceName: _dragData.name,
+                destPath: "",
+                destName: "ルート",
+              }
+            }));
+          }
+          _dragData = null;
         }
       });
     }
