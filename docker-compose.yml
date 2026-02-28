@@ -17,5 +17,23 @@ services:
       start_period: 5s
       retries: 3
 
+  mcp:
+    build: .
+    ports:
+      - "8081:8081"
+    volumes:
+      - uploads_data:/app/uploads
+    environment:
+      - UPLOAD_DIR=/app/uploads
+      - MCP_PORT=8081
+    restart: unless-stopped
+    command: ["python", "mcp_server.py"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-X", "POST", "http://localhost:8081/mcp"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
 volumes:
   uploads_data:

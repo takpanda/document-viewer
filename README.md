@@ -1,10 +1,12 @@
 # Document Viewer
 
 Markdownドキュメントをブラウザ上でプレビューできるWebアプリケーションです。  
-フォルダをアップロードすると、ファイルツリーとGitHub風のMarkdownプレビューを提供します。
+フォルダをアップロードすると、ファイルツリーとGitHub風のMarkdownプレビューを提供します。  
+MCPサーバーを内蔵しており、LLMからドキュメントへのアクセスも可能です。
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![Flask](https://img.shields.io/badge/Flask-3.x-green)
+![MCP](https://img.shields.io/badge/MCP-Streamable_HTTP-purple)
 ![Docker](https://img.shields.io/badge/Docker-ready-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
@@ -16,6 +18,7 @@ Markdownドキュメントをブラウザ上でプレビューできるWebアプ
 - **シンタックスハイライト** — highlight.js によるコードブロックの色付け
 - **ダークモード** — ライト / ダーク テーマの切り替え対応
 - **レスポンシブ対応** — モバイル・デスクトップ両対応のUI
+- **MCP サーバー** — LLMからドキュメントの参照・検索が可能（Streamable HTTP）
 
 ## 技術スタック
 
@@ -26,6 +29,7 @@ Markdownドキュメントをブラウザ上でプレビューできるWebアプ
 | ダイアグラム | mermaid.js |
 | コードハイライト | highlight.js |
 | バックエンド | Python 3.12, Flask 3.x |
+| MCP サーバー | mcp Python SDK (FastMCP) |
 | WSGIサーバー | Gunicorn |
 | コンテナ | Docker / Docker Compose |
 
@@ -42,7 +46,8 @@ cd document-viewer
 docker compose up --build
 ```
 
-ブラウザで **http://localhost:8080** にアクセスしてください。
+- Web UI: **http://localhost:8080**
+- MCP エンドポイント: **http://localhost:8081/mcp**
 
 ### ローカル開発
 
@@ -74,6 +79,7 @@ python app.py
 | `UPLOAD_DIR` | `/app/uploads` | アップロードファイルの保存先 |
 | `MAX_UPLOAD_SIZE` | `52428800` (50MB) | アップロードサイズ上限（バイト） |
 | `FLASK_ENV` | `production` | Flask実行環境 |
+| `MCP_PORT` | `8081` | MCPサーバーのポート番号 |
 
 ## API
 
@@ -86,13 +92,62 @@ python app.py
 | `GET` | `/api/file/{path}` | ファイル内容の取得 |
 | `DELETE` | `/api/files` | アップロードファイルの全削除 |
 
+## MCP サーバー
+
+LLMがアップロードされたドキュメントにアクセスするための [Model Context Protocol](https://modelcontextprotocol.io/) サーバーです。  
+Streamable HTTP トランスポートで動作し、`http://localhost:8081/mcp` で接続できます。
+
+### MCP Tools
+
+| Tool | 説明 | パラメータ |
+|------|------|------------|
+| `list_documents` | ファイルツリーの取得 | `path?` — 対象ディレクトリ（省略でルート） |
+| `read_document` | ファイル内容の読み取り | `path` — ファイルの相対パス |
+| `search_documents` | 全文キーワード検索（正規表現対応） | `query`, `file_pattern?` |
+| `get_document_info` | メタ情報の取得（サイズ・更新日等） | `path` |
+
+### MCP Resources
+
+| URI | 説明 |
+|-----|------|
+| `docs://tree` | ドキュメントツリー全体 |
+| `docs://file/{path}` | 個別ファイルの内容 |
+
+### クライアント設定例
+
+#### VS Code（`.vscode/mcp.json`）
+
+```json
+{
+  "servers": {
+    "document-viewer": {
+      "type": "http",
+      "url": "http://localhost:8081/mcp"
+    }
+  }
+}
+```
+
+#### Claude Desktop（`claude_desktop_config.json`）
+
+```json
+{
+  "mcpServers": {
+    "document-viewer": {
+      "url": "http://localhost:8081/mcp"
+    }
+  }
+}
+```
+
 ## プロジェクト構成
 
 ```
 document-viewer/
 ├── app.py                # Flask バックエンド
+├── mcp_server.py         # MCP サーバー（Streamable HTTP）
 ├── Dockerfile            # コンテナ定義
-├── docker-compose.yml    # Compose 設定
+├── docker-compose.yml    # Compose 設定（app + mcp）
 ├── requirements.txt      # Python 依存パッケージ
 ├── docs/                 # プロジェクトドキュメント
 │   ├── architecture.md   # アーキテクチャ概要
