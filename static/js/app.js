@@ -9,7 +9,6 @@ const App = (() => {
   /* ---- DOM references ---- */
 
   const btnUpload = document.getElementById("btn-upload");
-  const btnClear = document.getElementById("btn-clear");
   const btnTheme = document.getElementById("btn-theme");
   const btnSidebarToggle = document.getElementById("btn-sidebar-toggle");
   const folderInput = document.getElementById("folder-input");
@@ -69,9 +68,6 @@ const App = (() => {
 
       // Reload tree
       await Tree.load();
-
-      // Show clear button
-      btnClear.classList.remove("hidden");
 
       // Hide progress after a short delay
       setTimeout(() => {
@@ -180,7 +176,6 @@ const App = (() => {
 
       folderDialog.classList.add("hidden");
       await Tree.load();
-      btnClear.classList.remove("hidden");
     } catch (err) {
       console.error("Create folder error:", err);
       folderDialogErrorText.textContent = "エラーが発生しました";
@@ -240,7 +235,6 @@ const App = (() => {
       uploadBar.style.width = "100%";
 
       await Tree.load();
-      btnClear.classList.remove("hidden");
 
       setTimeout(() => uploadProgress.classList.add("hidden"), 1500);
     } catch (err) {
@@ -321,31 +315,10 @@ const App = (() => {
 
       await Tree.load();
 
-      // Hide clear button if tree is now empty
-      const hasEntries = document.querySelectorAll("#file-tree .tree-file").length > 0 ||
-                         document.querySelectorAll("#file-tree .tree-dir").length > 0;
-      if (!hasEntries) btnClear.classList.add("hidden");
     } catch (err) {
       console.error("Delete error:", err);
       alert("削除中にエラーが発生しました");
       deleteDialog.classList.add("hidden");
-    }
-  });
-
-  /* ==================================================================
-   *  Clear files
-   * ================================================================== */
-
-  btnClear.addEventListener("click", async () => {
-    if (!confirm("アップロードされたファイルをすべて削除しますか？")) return;
-
-    try {
-      await fetch("/api/files", { method: "DELETE" });
-      await Tree.load();
-      Preview.showWelcome();
-      btnClear.classList.add("hidden");
-    } catch (err) {
-      console.error("Clear error:", err);
     }
   });
 
@@ -508,7 +481,6 @@ const App = (() => {
       }
 
       await Tree.load();
-      btnClear.classList.remove("hidden");
     } catch (err) {
       console.error("Move error:", err);
       alert("移動中にエラーが発生しました");
@@ -522,13 +494,7 @@ const App = (() => {
    * ================================================================== */
 
   // Load tree on page load (may have persisted uploads from Docker volume)
-  Tree.load().then(() => {
-    // If tree has entries, show clear button
-    const hasEntries = document.querySelectorAll("#file-tree .tree-file").length > 0;
-    if (hasEntries) {
-      btnClear.classList.remove("hidden");
-    }
-  });
+  Tree.load();
 
   return { toggleSidebar };
 })();
