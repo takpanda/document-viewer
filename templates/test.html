@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Library Test</title>
+  <script src="/static/vendor/highlight.min.js"></script>
+  <script src="/static/vendor/marked.min.js"></script>
+  <script src="/static/vendor/mermaid.min.js"></script>
+</head>
+<body style="font-family: monospace; padding: 20px;">
+  <h2>Library Test Page</h2>
+  <pre id="log" style="background:#f0f0f0; padding:10px; white-space:pre-wrap;"></pre>
+  <hr/>
+  <h3>Markdown Render Test:</h3>
+  <div id="md-output" style="border:1px solid #ccc; padding:20px;"></div>
+  <hr/>
+  <h3>Mermaid Test:</h3>
+  <div id="mermaid-output" style="border:1px solid #ccc; padding:20px;"></div>
+
+  <script>
+    const log = document.getElementById('log');
+    function addLog(msg) {
+      log.textContent += msg + '\n';
+    }
+
+    // Test libraries
+    addLog('=== Library Check ===');
+    addLog('typeof marked: ' + typeof marked);
+    addLog('typeof marked.parse: ' + (marked ? typeof marked.parse : 'N/A'));
+    addLog('typeof marked.use: ' + (marked ? typeof marked.use : 'N/A'));
+    addLog('typeof hljs: ' + typeof hljs);
+    addLog('typeof hljs.highlight: ' + (typeof hljs !== 'undefined' ? typeof hljs.highlight : 'N/A'));
+    addLog('typeof mermaid: ' + typeof mermaid);
+    addLog('typeof mermaid.initialize: ' + (typeof mermaid !== 'undefined' ? typeof mermaid.initialize : 'N/A'));
+    addLog('typeof mermaid.run: ' + (typeof mermaid !== 'undefined' ? typeof mermaid.run : 'N/A'));
+
+    // Test marked.parse
+    addLog('\n=== marked.parse Test ===');
+    try {
+      const testMd = '# Hello\n\n```javascript\nconsole.log("test");\n```\n\n```mermaid\ngraph TD\n  A-->B\n```';
+      const html = marked.parse(testMd);
+      addLog('Parse result length: ' + html.length);
+      addLog('Contains <h1>: ' + html.includes('<h1'));
+      addLog('Contains <pre>: ' + html.includes('<pre'));
+      addLog('Contains <code>: ' + html.includes('<code'));
+      addLog('HTML output:\n' + html);
+
+      document.getElementById('md-output').innerHTML = html;
+    } catch(e) {
+      addLog('ERROR: ' + e.message);
+    }
+
+    // Test marked.use with custom renderer
+    addLog('\n=== marked.use Override Test ===');
+    try {
+      marked.use({
+        renderer: {
+          code(token) {
+            const text = token.text || '';
+            const lang = (token.lang || '').toLowerCase();
+            addLog('code() called: lang=' + lang + ', text.length=' + text.length);
+            if (lang === 'mermaid') {
+              return '<div class="mermaid">' + text + '</div>';
+            }
+            if (lang && hljs.getLanguage(lang)) {
+              const h = hljs.highlight(text, {language: lang}).value;
+              return '<pre><code class="hljs language-' + lang + '">' + h + '</code></pre>';
+            }
+            return '<pre><code>' + text + '</code></pre>';
+          }
+        }
+      });
+
+      const testMd2 = '```python\nprint("hello")\n```\n\n```mermaid\ngraph TD\n  A-->B\n```';
+      const html2 = marked.parse(testMd2);
+      addLog('Overridden parse result:\n' + html2);
+    } catch(e) {
+      addLog('Override ERROR: ' + e.message + '\n' + e.stack);
+    }
+
+    // Test mermaid
+    addLog('\n=== Mermaid Test ===');
+    try {
+      mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+      document.getElementById('mermaid-output').innerHTML = '<div class="mermaid" id="test-mm">graph TD\n  A[Start]-->B[End]</div>';
+      mermaid.run({ nodes: document.querySelectorAll('#test-mm') }).then(() => {
+        addLog('Mermaid render: SUCCESS');
+        addLog('SVG present: ' + !!document.querySelector('#test-mm svg'));
+      }).catch(e => {
+        addLog('Mermaid run error: ' + e.message);
+      });
+    } catch(e) {
+      addLog('Mermaid init ERROR: ' + e.message);
+    }
+  </script>
+</body>
+</html>
