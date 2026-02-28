@@ -9,6 +9,12 @@ const Tree = (() => {
   /** Currently selected file path */
   let _selectedPath = null;
 
+  /** Path of folder currently targeted by context menu (empty string = root) */
+  let _contextPath = "";
+
+  /** Type of item targeted by context menu: "directory" | "file" | "root" */
+  let _contextType = "root";
+
   /* ---- Icon helpers ---- */
 
   const ICONS = {
@@ -76,6 +82,15 @@ const Tree = (() => {
       }
     });
 
+    // Context menu on folder row
+    row.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      _contextPath = node.path;
+      _contextType = "directory";
+      _showContextMenu(e.clientX, e.clientY);
+    });
+
     wrapper.appendChild(row);
     wrapper.appendChild(childContainer);
     return wrapper;
@@ -94,6 +109,15 @@ const Tree = (() => {
 
     row.addEventListener("click", () => {
       _select(row, node.path);
+    });
+
+    // Context menu on file row
+    row.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      _contextPath = node.path;
+      _contextType = "file";
+      _showContextMenu(e.clientX, e.clientY);
     });
 
     return row;
@@ -117,6 +141,76 @@ const Tree = (() => {
     // Dispatch custom event with the selected file path
     document.dispatchEvent(new CustomEvent("file-selected", { detail: { path } }));
   }
+
+  /* ---- Context menu helpers ---- */
+
+  function _showContextMenu(x, y) {
+    const menu = document.getElementById("ctx-menu");
+    if (!menu) return;
+
+    // Toggle visibility of menu items based on context type
+    const newFolderBtn = document.getElementById("ctx-new-folder");
+    const uploadBtn = document.getElementById("ctx-upload-files");
+    const deleteBtn = document.getElementById("ctx-delete");
+    const separator = deleteBtn ? deleteBtn.previousElementSibling : null;
+
+    if (_contextType === "file") {
+      // File: only show delete
+      newFolderBtn && (newFolderBtn.classList.add("hidden"));
+      uploadBtn && (uploadBtn.classList.add("hidden"));
+      separator && (separator.classList.add("hidden"));
+      deleteBtn && (deleteBtn.classList.remove("hidden"));
+    } else if (_contextType === "directory") {
+      // Folder: show all
+      newFolderBtn && (newFolderBtn.classList.remove("hidden"));
+      uploadBtn && (uploadBtn.classList.remove("hidden"));
+      separator && (separator.classList.remove("hidden"));
+      deleteBtn && (deleteBtn.classList.remove("hidden"));
+    } else {
+      // Root: show new folder & upload only
+      newFolderBtn && (newFolderBtn.classList.remove("hidden"));
+      uploadBtn && (uploadBtn.classList.remove("hidden"));
+      separator && (separator.classList.add("hidden"));
+      deleteBtn && (deleteBtn.classList.add("hidden"));
+    }
+
+    menu.classList.remove("hidden");
+    // Position – keep within viewport
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    menu.style.left = `${Math.min(x, vw - 200)}px`;
+    menu.style.top = `${Math.min(y, vh - 100)}px`;
+  }
+
+  function _hideContextMenu() {
+    const menu = document.getElementById("ctx-menu");
+    if (menu) menu.classList.add("hidden");
+  }
+
+  // Close context menu on click outside / Escape
+  document.addEventListener("click", (e) => {
+    const menu = document.getElementById("ctx-menu");
+    if (menu && !menu.contains(e.target)) _hideContextMenu();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") _hideContextMenu();
+  });
+
+  // Root-level context menu on empty area of file-tree
+  document.addEventListener("DOMContentLoaded", () => {
+    const treeEl = document.getElementById("file-tree");
+    if (treeEl) {
+      treeEl.addEventListener("contextmenu", (e) => {
+        // Only trigger if click is directly on #file-tree or #tree-empty, not on a child row
+        if (e.target === treeEl || e.target.id === "tree-empty" || e.target.closest("#tree-empty")) {
+          e.preventDefault();
+          _contextPath = "";
+          _contextType = "root";
+          _showContextMenu(e.clientX, e.clientY);
+        }
+      });
+    }
+  });
 
   /* ---- Public API ---- */
 
@@ -158,5 +252,5 @@ const Tree = (() => {
     return d.innerHTML;
   }
 
-  return { load, getSelectedPath };
+  return { load, getSelectedPath, getContextPath: () => _contextPath, getContextType: () => _contextType, hideContextMenu: _hideContextMenu };
 })();

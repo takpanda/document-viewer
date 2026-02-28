@@ -334,6 +334,113 @@
 }
 
 /* ---------------------------------------------------------------
+ * Context menu & Dialogs
+ * --------------------------------------------------------------- */
+
+#ctx-menu {
+  animation: ctx-fade-in 0.1s ease-out;
+}
+
+@keyframes ctx-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Dialog overlay */
+.dialog-overlay {
+  animation: overlay-fade 0.25s ease-out;
+}
+
+@keyframes overlay-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Dialog card – spring pop entrance */
+.dialog-card {
+  animation: dialog-spring 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dialog-spring {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Dark mode dialog cards */
+.dark .dialog-card {
+  background: rgba(31, 41, 55, 0.97) !important;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.06) !important;
+}
+
+/* Dark mode overlay */
+.dark .dialog-overlay {
+  background: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* Dark mode gradient top bars */
+.dark #delete-dialog .dialog-card > .h-1\.5 {
+  background: linear-gradient(90deg, #ef4444, #f97316, #ef4444) !important;
+}
+.dark #folder-dialog .dialog-card > .h-1\.5 {
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6) !important;
+}
+
+/* Dark mode icon containers */
+.dark #delete-dialog .dialog-card [style*="linear-gradient(135deg,#fef2f2"] {
+  background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.08)) !important;
+}
+.dark #folder-dialog .dialog-card [style*="linear-gradient(135deg,#eff6ff"] {
+  background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.08)) !important;
+}
+
+/* Dark mode path chip / cancel buttons */
+.dark .dialog-card [style*="background:rgba(0,0,0,0.03)"],
+.dark .dialog-card [style*="background:rgba(0,0,0,0.04)"] {
+  background: rgba(255,255,255,0.05) !important;
+}
+
+/* Dark mode error container */
+.dark #folder-dialog-error {
+  background: rgba(127, 29, 29, 0.2) !important;
+  border-color: rgba(185, 28, 28, 0.3) !important;
+}
+
+/* Dark mode input border */
+.dark #folder-name-input {
+  border-color: #4b5563 !important;
+}
+.dark #folder-name-input:focus {
+  border-color: #60a5fa !important;
+}
+
+/* Focus ring on input */
+#folder-name-input:focus {
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+}
+.dark #folder-name-input:focus {
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+/* Error alert shake */
+#folder-dialog-error:not(.hidden) {
+  animation: shake 0.35s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(5px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(2px); }
+}
+
+/* ---------------------------------------------------------------
  * Tree overrides
  * --------------------------------------------------------------- */
 
