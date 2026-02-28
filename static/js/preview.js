@@ -187,6 +187,158 @@ const Preview = (() => {
         }
       });
     }
+
+    // Initialize zoom/pan for rendered diagrams
+    _initMermaidZoom(mermaidDivs);
+  }
+
+  function _initMermaidZoom(mermaidDivs) {
+    mermaidDivs.forEach((container) => {
+      const svg = container.querySelector("svg");
+      if (!svg) return;
+
+      // Remove any previous toolbar
+      const oldToolbar = container.querySelector(".mermaid-toolbar");
+      if (oldToolbar) oldToolbar.remove();
+
+      // Inject toolbar
+      const toolbar = document.createElement("div");
+      toolbar.className = "mermaid-toolbar";
+      toolbar.innerHTML = `
+        <button class="mermaid-zoom-in"  title="ズームイン">＋</button>
+        <button class="mermaid-zoom-out" title="ズームアウト">－</button>
+        <button class="mermaid-reset"    title="リセット">⊙</button>
+      `;
+      container.appendChild(toolbar);
+
+      // State
+      let scale = 1, tx = 0, ty = 0;
+      let isDragging = false, lastX = 0, lastY = 0;
+      // Touch
+      let lastTouchDist = null;
+      let lastTouchMidX = 0, lastTouchMidY = 0;
+
+      // Fit SVG to container width if it overflows
+      const svgW = svg.getBoundingClientRect().width || svg.viewBox.baseVal.width || 0;
+      const containerW = container.clientWidth - 32;
+      if (svgW > 0 && svgW > containerW) {
+        scale = containerW / svgW;
+      }
+      applyTransform();
+
+      function clamp(v, min, max) { return Math.min(Math.max(v, min), max); }
+
+      function applyTransform() {
+        svg.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+        const svgNativeH = svg.viewBox.baseVal.height || svg.getBoundingClientRect().height / scale;
+        container.style.minHeight = (svgNativeH * scale + 32) + "px";
+      }
+
+      function zoomAt(clientX, clientY, factor) {
+        const rect = container.getBoundingClientRect();
+        const mx = clientX - rect.left - 16;
+        const my = clientY - rect.top  - 16;
+        const newScale = clamp(scale * factor, 0.1, 5);
+        tx = mx - (mx - tx) * (newScale / scale);
+        ty = my - (my - ty) * (newScale / scale);
+        scale = newScale;
+        applyTransform();
+      }
+
+      // ---- Wheel zoom ----
+      container.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.1 : 0.9;
+        zoomAt(e.clientX, e.clientY, factor);
+      }, { passive: false });
+
+      // ---- Mouse drag ----
+      container.addEventListener("mousedown", (e) => {
+        if (e.button !== 0) return;
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        container.style.cursor = "grabbing";
+        e.preventDefault();
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        tx += e.clientX - lastX;
+        ty += e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        applyTransform();
+      });
+      window.addEventListener("mouseup", () => {
+        if (!isDragging) return;
+        isDragging = false;
+        container.style.cursor = "grab";
+      });
+
+      // ---- Double-click reset ----
+      container.addEventListener("dblclick", () => {
+        scale = 1; tx = 0; ty = 0;
+        applyTransform();
+      });
+
+      // ---- Touch (pinch zoom + pan) ----
+      container.addEventListener("touchstart", (e) => {
+        if (e.touches.length === 2) {
+          const [a, b] = e.touches;
+          lastTouchDist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+          lastTouchMidX = (a.clientX + b.clientX) / 2;
+          lastTouchMidY = (a.clientY + b.clientY) / 2;
+        } else if (e.touches.length === 1) {
+          lastX = e.touches[0].clientX;
+          lastY = e.touches[0].clientY;
+          lastTouchDist = null;
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      container.addEventListener("touchmove", (e) => {
+        if (e.touches.length === 2) {
+          const [a, b] = e.touches;
+          const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+          const midX = (a.clientX + b.clientX) / 2;
+          const midY = (a.clientY + b.clientY) / 2;
+          if (lastTouchDist) {
+            zoomAt(midX, midY, dist / lastTouchDist);
+          }
+          lastTouchDist = dist;
+          lastTouchMidX = midX;
+          lastTouchMidY = midY;
+        } else if (e.touches.length === 1 && lastTouchDist === null) {
+          tx += e.touches[0].clientX - lastX;
+          ty += e.touches[0].clientY - lastY;
+          lastX = e.touches[0].clientX;
+          lastY = e.touches[0].clientY;
+          applyTransform();
+        }
+        e.preventDefault();
+      }, { passive: false });
+
+      container.addEventListener("touchend", (e) => {
+        if (e.touches.length < 2) lastTouchDist = null;
+      });
+
+      // ---- Toolbar buttons ----
+      toolbar.querySelector(".mermaid-zoom-in").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const rect = container.getBoundingClientRect();
+        zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1.2);
+      });
+      toolbar.querySelector(".mermaid-zoom-out").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const rect = container.getBoundingClientRect();
+        zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 0.85);
+      });
+      toolbar.querySelector(".mermaid-reset").addEventListener("click", (e) => {
+        e.stopPropagation();
+        scale = 1; tx = 0; ty = 0;
+        applyTransform();
+      });
+    });
   }
 
   /* ---- Breadcrumb ---- */
