@@ -138,6 +138,72 @@ def upload():
     return jsonify({"message": f"{saved} files uploaded", "count": saved})
 
 
+@app.route("/api/folder", methods=["POST"])
+def create_folder():
+    """Create a new folder under UPLOAD_DIR.
+
+    Expects JSON body: { "path": "relative/path/to/new-folder" }
+    """
+    data = request.get_json(silent=True) or {}
+    rel_path = (data.get("path") or "").strip()
+
+    if not rel_path:
+        return jsonify({"error": "パスが指定されていません"}), 400
+
+    # Validate folder name segments
+    for segment in rel_path.replace("\\", "/").split("/"):
+        if not segment or segment in (".", "..") or "/" in segment:
+            return jsonify({"error": "無効なフォルダ名です"}), 400
+
+    dest = _safe_path(rel_path)
+    if dest.exists():
+        return jsonify({"error": "同名のフォルダまたはファイルが既に存在します"}), 409
+
+    dest.mkdir(parents=True, exist_ok=True)
+    return jsonify({"message": "フォルダを作成しました", "path": rel_path}), 201
+
+
+@app.route("/api/upload-to", methods=["POST"])
+def upload_to_folder():
+    """Upload files to a specific target folder.
+
+    Form fields:
+      - target: relative path of the destination folder
+      - files[]: one or more files
+    """
+    target = (request.form.get("target") or "").strip()
+    files = request.files.getlist("files[]")
+
+    if not files:
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    # Resolve target directory (empty string = root)
+    if target:
+        target_dir = _safe_path(target)
+    else:
+        target_dir = UPLOAD_DIR
+
+    if not target_dir.is_dir():
+        return jsonify({"error": "指定されたフォルダが存在しません"}), 404
+
+    saved = 0
+    for f in files:
+        filename = f.filename or ""
+        # Strip any directory components the browser may include
+        filename = filename.replace("\\", "/").split("/")[-1].strip()
+        if not filename or filename.startswith("."):
+            continue
+        dest = (target_dir / filename).resolve()
+        # Guard against traversal
+        if not str(dest).startswith(str(UPLOAD_DIR.resolve())):
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        f.save(dest)
+        saved += 1
+
+    return jsonify({"message": f"{saved} 件のファイルをアップロードしました", "count": saved})
+
+
 @app.route("/api/tree")
 def tree():
     """Return the directory tree of uploaded documents as JSON."""
@@ -165,6 +231,42 @@ def get_file(filepath: str):
         return send_file(resolved)
 
     return content, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+@app.route("/api/item", methods=["DELETE"])
+def delete_item():
+    """Delete a single file or folder.
+
+    Expects JSON body: { "path": "relative/path", "type": "file"|"directory" }
+    """
+    data = request.get_json(silent=True) or {}
+    rel_path = (data.get("path") or "").strip()
+    item_type = (data.get("type") or "").strip()
+
+    if not rel_path:
+        return jsonify({"error": "パスが指定されていません"}), 400
+    if item_type not in ("file", "directory"):
+        return jsonify({"error": "種別が不正です"}), 400
+
+    resolved = _safe_path(rel_path)
+
+    if not resolved.exists():
+        return jsonify({"error": "対象が見つかりません"}), 404
+
+    # Extra safety: don't allow deleting the upload root itself
+    if resolved.resolve() == UPLOAD_DIR.resolve():
+        return jsonify({"error": "ルートフォルダは削除できません"}), 403
+
+    if item_type == "directory":
+        if not resolved.is_dir():
+            return jsonify({"error": "指定されたパスはフォルダではありません"}), 400
+        shutil.rmtree(resolved)
+    else:
+        if not resolved.is_file():
+            return jsonify({"error": "指定されたパスはファイルではありません"}), 400
+        resolved.unlink()
+
+    return jsonify({"message": "削除しました", "path": rel_path})
 
 
 @app.route("/api/files", methods=["DELETE"])

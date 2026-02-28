@@ -89,6 +89,233 @@ const App = (() => {
   });
 
   /* ==================================================================
+   *  Context menu – New Folder
+   * ================================================================== */
+
+  const ctxNewFolder = document.getElementById("ctx-new-folder");
+  const ctxUploadFiles = document.getElementById("ctx-upload-files");
+  const folderDialog = document.getElementById("folder-dialog");
+  const folderNameInput = document.getElementById("folder-name-input");
+  const folderDialogError = document.getElementById("folder-dialog-error");
+  const folderDialogErrorText = document.getElementById("folder-dialog-error-text");
+  const folderDialogParent = document.getElementById("folder-dialog-parent");
+  const folderDialogCancel = document.getElementById("folder-dialog-cancel");
+  const folderDialogCreate = document.getElementById("folder-dialog-create");
+  const fileUploadInput = document.getElementById("file-upload-input");
+
+  /** Open the "New Folder" dialog */
+  ctxNewFolder.addEventListener("click", () => {
+    Tree.hideContextMenu();
+    folderNameInput.value = "";
+    folderDialogError.classList.add("hidden");
+    const parentPath = Tree.getContextPath();
+    folderDialogParent.textContent = parentPath ? `作成先: /${parentPath}/` : "作成先: / (ルート)";
+    folderDialog.classList.remove("hidden");
+    setTimeout(() => folderNameInput.focus(), 50);
+  });
+
+  /** Cancel folder dialog */
+  folderDialogCancel.addEventListener("click", () => {
+    folderDialog.classList.add("hidden");
+  });
+
+  /** Close folder dialog on Escape */
+  folderNameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") folderDialog.classList.add("hidden");
+    if (e.key === "Enter") folderDialogCreate.click();
+  });
+
+  /** Close dialog when clicking the overlay background */
+  folderDialog.addEventListener("click", (e) => {
+    if (e.target === folderDialog || e.target.classList.contains("dialog-overlay")) folderDialog.classList.add("hidden");
+  });
+
+  /** Create folder */
+  folderDialogCreate.addEventListener("click", async () => {
+    const name = folderNameInput.value.trim();
+    if (!name) {
+      folderDialogErrorText.textContent = "フォルダ名を入力してください";
+      folderDialogError.classList.remove("hidden");
+      return;
+    }
+    // Disallow invalid characters
+    if (/[\/\\:*?"<>|]/.test(name) || name === "." || name === "..") {
+      folderDialogErrorText.textContent = "使用できない文字が含まれています";
+      folderDialogError.classList.remove("hidden");
+      return;
+    }
+
+    const parentPath = Tree.getContextPath();
+    const fullPath = parentPath ? `${parentPath}/${name}` : name;
+
+    try {
+      const res = await fetch("/api/folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: fullPath }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        folderDialogErrorText.textContent = data.error || "作成に失敗しました";
+        folderDialogError.classList.remove("hidden");
+        return;
+      }
+
+      folderDialog.classList.add("hidden");
+      await Tree.load();
+      btnClear.classList.remove("hidden");
+    } catch (err) {
+      console.error("Create folder error:", err);
+      folderDialogErrorText.textContent = "エラーが発生しました";
+      folderDialogError.classList.remove("hidden");
+    }
+  });
+
+  /* ==================================================================
+   *  Context menu – Upload files to folder
+   * ================================================================== */
+
+  ctxUploadFiles.addEventListener("click", () => {
+    Tree.hideContextMenu();
+    fileUploadInput.value = "";
+    fileUploadInput.click();
+  });
+
+  fileUploadInput.addEventListener("change", async (e) => {
+    const files = e.target.files;
+    if (!files || !files.length) return;
+
+    const targetPath = Tree.getContextPath();
+
+    // Show progress
+    uploadProgress.classList.remove("hidden");
+    uploadBar.style.width = "0%";
+    uploadStatus.textContent = `アップロード中… (${files.length} ファイル)`;
+
+    const formData = new FormData();
+    formData.append("target", targetPath);
+    for (const file of files) {
+      formData.append("files[]", file);
+    }
+
+    try {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener("progress", (ev) => {
+        if (ev.lengthComputable) {
+          const pct = Math.round((ev.loaded / ev.total) * 100);
+          uploadBar.style.width = `${pct}%`;
+          uploadStatus.textContent = `アップロード中… ${pct}%`;
+        }
+      });
+
+      await new Promise((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Upload failed: ${xhr.status}`));
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.open("POST", "/api/upload-to");
+        xhr.send(formData);
+      });
+
+      uploadStatus.textContent = "アップロード完了！";
+      uploadBar.style.width = "100%";
+
+      await Tree.load();
+      btnClear.classList.remove("hidden");
+
+      setTimeout(() => uploadProgress.classList.add("hidden"), 1500);
+    } catch (err) {
+      console.error("Upload-to error:", err);
+      uploadStatus.textContent = `エラー: ${err.message}`;
+      uploadBar.style.width = "0%";
+      setTimeout(() => uploadProgress.classList.add("hidden"), 3000);
+    }
+
+    fileUploadInput.value = "";
+  });
+
+  /* ==================================================================
+   *  Context menu – Delete item
+   * ================================================================== */
+
+  const ctxDelete = document.getElementById("ctx-delete");
+  const deleteDialog = document.getElementById("delete-dialog");
+  const deleteDialogMsg = document.getElementById("delete-dialog-msg");
+  const deleteDialogPathText = document.getElementById("delete-dialog-path-text");
+  const deleteDialogCancel = document.getElementById("delete-dialog-cancel");
+  const deleteDialogConfirm = document.getElementById("delete-dialog-confirm");
+
+  let _pendingDeletePath = "";
+  let _pendingDeleteType = "";
+
+  ctxDelete.addEventListener("click", () => {
+    Tree.hideContextMenu();
+    _pendingDeletePath = Tree.getContextPath();
+    _pendingDeleteType = Tree.getContextType();
+
+    if (!_pendingDeletePath) return;
+
+    const name = _pendingDeletePath.split("/").pop();
+    const kind = _pendingDeleteType === "directory" ? "フォルダ" : "ファイル";
+    deleteDialogMsg.innerHTML = `${kind}<strong class="text-gray-900 dark:text-gray-100">「${_escHtml(name)}」</strong>を削除しますか？${_pendingDeleteType === "directory" ? "<br/><span class='text-red-500 dark:text-red-400 text-xs'>※ 中のファイルもすべて削除されます</span>" : ""}`;
+    deleteDialogPathText.textContent = `/${_pendingDeletePath}`;
+    deleteDialog.classList.remove("hidden");
+  });
+
+  deleteDialogCancel.addEventListener("click", () => {
+    deleteDialog.classList.add("hidden");
+  });
+
+  deleteDialog.addEventListener("click", (e) => {
+    if (e.target === deleteDialog || e.target.classList.contains("dialog-overlay")) deleteDialog.classList.add("hidden");
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !deleteDialog.classList.contains("hidden")) {
+      deleteDialog.classList.add("hidden");
+    }
+  });
+
+  deleteDialogConfirm.addEventListener("click", async () => {
+    if (!_pendingDeletePath) return;
+
+    try {
+      const res = await fetch("/api/item", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: _pendingDeletePath, type: _pendingDeleteType }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "削除に失敗しました");
+        deleteDialog.classList.add("hidden");
+        return;
+      }
+
+      deleteDialog.classList.add("hidden");
+
+      // If the deleted item was the currently previewed file, show welcome
+      const selected = Tree.getSelectedPath();
+      if (selected && (selected === _pendingDeletePath || selected.startsWith(_pendingDeletePath + "/"))) {
+        Preview.showWelcome();
+      }
+
+      await Tree.load();
+
+      // Hide clear button if tree is now empty
+      const hasEntries = document.querySelectorAll("#file-tree .tree-file").length > 0 ||
+                         document.querySelectorAll("#file-tree .tree-dir").length > 0;
+      if (!hasEntries) btnClear.classList.add("hidden");
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("削除中にエラーが発生しました");
+      deleteDialog.classList.add("hidden");
+    }
+  });
+
+  /* ==================================================================
    *  Clear files
    * ================================================================== */
 
@@ -180,6 +407,16 @@ const App = (() => {
       document.body.style.userSelect = "";
     }
   });
+
+  /* ==================================================================
+   *  Helpers
+   * ================================================================== */
+
+  function _escHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  }
 
   /* ==================================================================
    *  Initial load
