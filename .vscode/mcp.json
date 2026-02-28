@@ -4,6 +4,10 @@
       "type": "stdio",
       "command": "npx",
       "args": ["@playwright/mcp@latest"]
+    },
+    "document-viewer": {
+      "type": "http",
+      "url": "http://localhost:8081/mcp"
     }
   }
 }
