@@ -98,6 +98,12 @@ const Preview = (() => {
       return;
     }
 
+    // HTML files → sandboxed iframe preview
+    if (/\.html?$/i.test(filePath)) {
+      _renderHtml(filePath);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/file/${encodeURI(filePath)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -145,6 +151,21 @@ const Preview = (() => {
   function _renderPlainText(text, _filePath) {
     const highlighted = hljs.highlightAuto(text).value;
     contentEl.innerHTML = `<pre><code class="hljs">${highlighted}</code></pre>`;
+    _showContent();
+    previewPane.scrollTop = 0;
+  }
+
+  function _renderHtml(filePath) {
+    _showBreadcrumb(filePath);
+    contentEl.innerHTML = `
+      <iframe
+        src="/api/html-preview/${encodeURI(filePath)}"
+        sandbox="allow-scripts allow-same-origin allow-forms"
+        class="w-full border-0 rounded"
+        style="height: 80vh;"
+        title="${_esc(filePath)}"
+      ></iframe>
+    `;
     _showContent();
     previewPane.scrollTop = 0;
   }
