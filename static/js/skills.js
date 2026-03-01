@@ -267,7 +267,7 @@ const Skills = (() => {
                   data-download-url="/api/skills/${encodeURIComponent(skill.author)}/${encodeURIComponent(skill.skill_name)}/download"
                   style="background:#3b82f6;box-shadow:0 4px 14px rgba(59,130,246,0.35)">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
-            ZIPダウンロード
+            スキルをダウンロード
           </button>
           <button class="skill-share-btn inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" title="リンクをコピー">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
@@ -282,7 +282,7 @@ const Skills = (() => {
             インストール手順
           </h3>
           <ol class="text-sm text-gray-600 dark:text-gray-400 space-y-1 list-decimal list-inside">
-            <li>上の「ZIPダウンロード」ボタンでZIPファイルを取得</li>
+            <li>上の「スキルをダウンロード」ボタンでZIPファイルを取得</li>
             <li>ダウンロードしたZIPを展開します。</li>
             ${isWindows ? `
             <li>エクスプローラーで右クリックして「すべて展開」を選び、展開先に
