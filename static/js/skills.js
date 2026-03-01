@@ -9,6 +9,7 @@ const Skills = (() => {
   /* ---- State ---- */
   let _skills = [];
   let _selectedSkill = null;
+  let _sortOrder = "updated_at";
 
   /* ---- Likes ---- */
   const LIKED_KEY = "skill-likes";
@@ -92,6 +93,11 @@ const Skills = (() => {
     return d.toLocaleDateString("ja-JP", { year: "numeric", month: "short", day: "numeric" });
   }
 
+  function _isWithinWeek(iso) {
+    if (!iso) return false;
+    return (Date.now() - new Date(iso).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  }
+
   /* ---- API ---- */
 
   async function load(query = "") {
@@ -117,8 +123,19 @@ const Skills = (() => {
     }
     skillsEmpty.classList.add("hidden");
 
+    // Sort based on _sortOrder
+    const sorted = [..._skills].sort((a, b) => {
+      if (_sortOrder === "likes") {
+        const diff = (b.likes || 0) - (a.likes || 0);
+        if (diff !== 0) return diff;
+      }
+      const da = new Date(a.updated_at || a.uploaded_at || 0);
+      const db = new Date(b.updated_at || b.uploaded_at || 0);
+      return db - da;
+    });
+
     const fragment = document.createDocumentFragment();
-    for (const skill of _skills) {
+    for (const skill of sorted) {
       fragment.appendChild(_renderCard(skill));
     }
     skillsList.appendChild(fragment);
@@ -126,7 +143,7 @@ const Skills = (() => {
 
   function _renderCard(skill) {
     const card = document.createElement("div");
-    card.className = "skill-card group p-3 mx-2 mb-2 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-150";
+    card.className = "skill-card group p-3 mx-2 mb-2 rounded-lg cursor-pointer border border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all duration-150";
     card.dataset.author = skill.author;
     card.dataset.skillName = skill.skill_name;
 
@@ -139,9 +156,15 @@ const Skills = (() => {
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
             <span class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">${_esc(skill.name || skill.skill_name)}</span>
+            ${(skill.version || 1) >= 2 ? `<span class="inline-flex items-center px-1.5 py-0 text-[10px] font-semibold rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400">v${skill.version}</span>` : ""}
+            ${(skill.version || 1) >= 2 && _isWithinWeek(skill.updated_at)
+              ? `<span class="inline-flex items-center px-1.5 py-0 text-[10px] font-bold rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">UPDATE</span>`
+              : _isWithinWeek(skill.uploaded_at)
+              ? `<span class="inline-flex items-center px-1.5 py-0 text-[10px] font-bold rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">NEW</span>`
+              : ""}
           </div>
           <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">${_esc(skill.author)}</div>
-          ${skill.description ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">${_esc(skill.description)}</p>` : ""}
+          ${skill.description ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-4">${_esc(skill.description)}</p>` : ""}
           <div class="flex items-center mt-1.5">
             <button class="skill-like-btn flex items-center gap-0.5 text-xs rounded px-1 py-0.5 ${liked ? "text-pink-500" : "text-gray-400 hover:text-pink-400"} transition-colors"
                     data-author="${_esc(skill.author)}" data-skill-name="${_esc(skill.skill_name)}">
@@ -218,10 +241,13 @@ const Skills = (() => {
             <svg class="w-7 h-7 text-violet-600 dark:text-violet-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/></svg>
           </div>
           <div class="flex-1 min-w-0">
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">${_esc(skill.name || skill.skill_name)}</h1>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">${_esc(skill.name || skill.skill_name)}
+              ${(skill.version || 1) >= 2 ? `<span class="inline-flex items-center ml-2 px-2 py-0.5 text-xs font-semibold rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400">v${skill.version}</span>` : ""}
+            </h1>
             <div class="flex items-center gap-2 mt-1">
               <span class="text-sm text-gray-500 dark:text-gray-400">by ${_esc(skill.author)}</span>
               ${skill.uploaded_at ? `<span class="text-xs text-gray-400 dark:text-gray-500">· ${_formatDate(skill.uploaded_at)}</span>` : ""}
+              ${(skill.version || 1) >= 2 && skill.updated_at ? `<span class="text-xs text-gray-400 dark:text-gray-500">· 更新: ${_formatDate(skill.updated_at)}</span>` : ""}
             </div>
             ${skill.description ? `<p class="text-sm text-gray-600 dark:text-gray-400 mt-2">${_esc(skill.description)}</p>` : ""}
           </div>
@@ -234,12 +260,12 @@ const Skills = (() => {
             いいね
             <span class="skill-like-count font-semibold">${skill.likes || 0}</span>
           </button>
-          <a href="/api/skills/${encodeURIComponent(skill.author)}/${encodeURIComponent(skill.skill_name)}/download"
-             class="skill-download-btn inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl transition-all duration-150"
-             style="background:#3b82f6;box-shadow:0 4px 14px rgba(59,130,246,0.35)">
+          <button class="skill-download-btn inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl transition-all duration-150"
+                  data-download-url="/api/skills/${encodeURIComponent(skill.author)}/${encodeURIComponent(skill.skill_name)}/download"
+                  style="background:#3b82f6;box-shadow:0 4px 14px rgba(59,130,246,0.35)">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
             ZIPダウンロード
-          </a>
+          </button>
           <button class="skill-delete-btn inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   data-author="${_esc(skill.author)}" data-skill-name="${_esc(skill.skill_name)}">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
@@ -248,7 +274,7 @@ const Skills = (() => {
         </div>
 
         <!-- Install instructions -->
-        <div class="mb-8 p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+        <div id="skill-install-section" class="hidden mb-8 p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
           <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1.5">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5"/></svg>
             インストール手順
@@ -273,6 +299,21 @@ const Skills = (() => {
           </div>
         </div>
 
+        <!-- Files list accordion -->
+        ${skill.files && skill.files.length ? `
+        <div class="mb-8 p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          <button class="skill-files-toggle w-full flex items-center justify-between gap-1.5 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+            <span class="flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+              ファイル構成
+              <span class="text-xs font-normal text-gray-400">(${skill.files.length}件)</span>
+            </span>
+            <svg class="skill-files-chevron w-4 h-4 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+          </button>
+          <ul class="skill-files-list hidden mt-3 space-y-0.5">${filesList}</ul>
+        </div>
+        ` : ""}
+
         <!-- SKILL.md content -->
         <div id="skill-md-content" class="markdown-body">
           <div class="flex items-center justify-center py-8 text-gray-400">
@@ -280,17 +321,6 @@ const Skills = (() => {
             読み込み中...
           </div>
         </div>
-
-        <!-- Files list -->
-        ${skill.files && skill.files.length ? `
-        <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-          <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-1.5">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
-            ファイル構成
-          </h3>
-          <ul class="space-y-0.5">${filesList}</ul>
-        </div>
-        ` : ""}
       </div>
     `;
 
@@ -298,6 +328,30 @@ const Skills = (() => {
     const likeBtn = skillDetailPane.querySelector(".skill-like-btn");
     if (likeBtn) {
       likeBtn.addEventListener("click", () => _likeSkill(skill.author, skill.skill_name));
+    }
+
+    // Wire up files accordion
+    const filesToggle = skillDetailPane.querySelector(".skill-files-toggle");
+    if (filesToggle) {
+      filesToggle.addEventListener("click", () => {
+        const list = skillDetailPane.querySelector(".skill-files-list");
+        const chevron = skillDetailPane.querySelector(".skill-files-chevron");
+        if (list) list.classList.toggle("hidden");
+        if (chevron) chevron.classList.toggle("rotate-180");
+      });
+    }
+
+    // Wire up download button
+    const downloadBtn = skillDetailPane.querySelector(".skill-download-btn");
+    if (downloadBtn) {
+      downloadBtn.addEventListener("click", () => {
+        const installSection = skillDetailPane.querySelector("#skill-install-section");
+        if (installSection) {
+          installSection.classList.remove("hidden");
+          installSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+        window.location.href = downloadBtn.dataset.downloadUrl;
+      });
     }
 
     // Wire up copy button
@@ -404,6 +458,46 @@ const Skills = (() => {
         alert("削除中にエラーが発生しました");
       }
       dialog.classList.add("hidden");
+    });
+  }
+
+  /* ---- Sort ---- */
+
+  function _updateSortUI() {
+    const btnUpdated = document.getElementById("btn-sort-updated");
+    const btnLikes = document.getElementById("btn-sort-likes");
+    if (!btnUpdated || !btnLikes) return;
+
+    const activeClasses = ["border-violet-400", "bg-violet-100", "dark:bg-violet-900/40", "text-violet-700", "dark:text-violet-300"];
+    const inactiveClasses = ["border-gray-200", "dark:border-gray-700", "bg-transparent", "text-gray-500", "dark:text-gray-400", "hover:bg-gray-100", "dark:hover:bg-gray-800"];
+
+    if (_sortOrder === "updated_at") {
+      btnUpdated.classList.remove(...inactiveClasses);
+      btnUpdated.classList.add(...activeClasses);
+      btnLikes.classList.remove(...activeClasses);
+      btnLikes.classList.add(...inactiveClasses);
+    } else {
+      btnLikes.classList.remove(...inactiveClasses);
+      btnLikes.classList.add(...activeClasses);
+      btnUpdated.classList.remove(...activeClasses);
+      btnUpdated.classList.add(...inactiveClasses);
+    }
+  }
+
+  const sortUpdatedBtn = document.getElementById("btn-sort-updated");
+  const sortLikesBtn = document.getElementById("btn-sort-likes");
+  if (sortUpdatedBtn) {
+    sortUpdatedBtn.addEventListener("click", () => {
+      _sortOrder = "updated_at";
+      _updateSortUI();
+      _render();
+    });
+  }
+  if (sortLikesBtn) {
+    sortLikesBtn.addEventListener("click", () => {
+      _sortOrder = "likes";
+      _updateSortUI();
+      _render();
     });
   }
 
