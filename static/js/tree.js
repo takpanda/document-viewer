@@ -224,6 +224,7 @@ const Tree = (() => {
     // Toggle visibility of menu items based on context type
     const newFolderBtn = document.getElementById("ctx-new-folder");
     const uploadBtn = document.getElementById("ctx-upload-files");
+    const renameBtn = document.getElementById("ctx-rename");
     const deleteBtn = document.getElementById("ctx-delete");
     const separator = deleteBtn ? deleteBtn.previousElementSibling : null;
 
@@ -231,18 +232,21 @@ const Tree = (() => {
       // File: only show delete
       newFolderBtn && (newFolderBtn.classList.add("hidden"));
       uploadBtn && (uploadBtn.classList.add("hidden"));
+      renameBtn && (renameBtn.classList.add("hidden"));
       separator && (separator.classList.add("hidden"));
       deleteBtn && (deleteBtn.classList.remove("hidden"));
     } else if (_contextType === "directory") {
       // Folder: show all
       newFolderBtn && (newFolderBtn.classList.remove("hidden"));
       uploadBtn && (uploadBtn.classList.remove("hidden"));
+      renameBtn && (renameBtn.classList.remove("hidden"));
       separator && (separator.classList.remove("hidden"));
       deleteBtn && (deleteBtn.classList.remove("hidden"));
     } else {
       // Root: show new folder & upload only
       newFolderBtn && (newFolderBtn.classList.remove("hidden"));
       uploadBtn && (uploadBtn.classList.remove("hidden"));
+      renameBtn && (renameBtn.classList.add("hidden"));
       separator && (separator.classList.add("hidden"));
       deleteBtn && (deleteBtn.classList.add("hidden"));
     }

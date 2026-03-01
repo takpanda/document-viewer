@@ -329,6 +329,48 @@ def move_item():
     return jsonify({"message": "移動しました", "path": new_rel})
 
 
+@app.route("/api/rename", methods=["POST"])
+def rename_folder():
+    """Rename a folder under UPLOAD_DIR.
+
+    Expects JSON body: { "path": "relative/path/to/folder", "new_name": "new-folder-name" }
+    """
+    data = request.get_json(silent=True) or {}
+    rel_path = (data.get("path") or "").strip()
+    new_name = (data.get("new_name") or "").strip()
+
+    if not rel_path:
+        return jsonify({"error": "パスが指定されていません"}), 400
+    if not new_name:
+        return jsonify({"error": "新しい名前が指定されていません"}), 400
+
+    # Validate new_name – must be a single path segment
+    if "/" in new_name or "\\" in new_name or new_name in (".", ".."):
+        return jsonify({"error": "無効なフォルダ名です"}), 400
+
+    source = _safe_path(rel_path)
+    if not source.exists():
+        return jsonify({"error": "対象フォルダが見つかりません"}), 404
+    if not source.is_dir():
+        return jsonify({"error": "指定されたパスはフォルダではありません"}), 400
+
+    # Cannot rename the upload root itself
+    if source.resolve() == UPLOAD_DIR.resolve():
+        return jsonify({"error": "ルートフォルダは変更できません"}), 403
+
+    dest = source.parent / new_name
+    if dest.exists():
+        return jsonify({"error": "同名のフォルダまたはファイルが既に存在します"}), 409
+
+    dest_resolved = dest.resolve()
+    if not str(dest_resolved).startswith(str(UPLOAD_DIR.resolve())):
+        return jsonify({"error": "無効な操作です"}), 403
+
+    source.rename(dest)
+    new_rel = str(dest.relative_to(UPLOAD_DIR))
+    return jsonify({"message": "フォルダ名を変更しました", "path": new_rel})
+
+
 @app.route("/api/files", methods=["DELETE"])
 def clear_files():
     """Remove all uploaded files."""
