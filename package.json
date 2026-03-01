@@ -1,0 +1,20 @@
+{
+  "name": "document-viewer",
+  "version": "0.1.0",
+  "description": "Markdown document preview web app with MCP server",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i tailwind.input.css -o static/vendor/tailwind.min.css --config tailwind.config.js --minify",
+    "watch:css": "tailwindcss -i tailwind.input.css -o static/vendor/tailwind.min.css --config tailwind.config.js --watch",
+    "e2e:install": "npx playwright-cli install --skills",
+    "e2e:open": "npx playwright-cli open http://localhost:8080",
+    "e2e": "npm run e2e:open && echo \"Make sure the app is running on http://localhost:8080\" && npx playwright-cli goto http://localhost:8080 && npx playwright-cli screenshot --filename=playground.png"
+  },
+  "devDependencies": {
+    "@playwright/cli": "latest",
+    "tailwindcss": "^3.4.19"
+  },
+  "dependencies": {
+    "@tailwindcss/cli": "^4.2.1"
+  }
+}

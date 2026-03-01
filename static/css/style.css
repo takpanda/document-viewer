@@ -508,3 +508,116 @@
 .dark #resize-handle::after {
   background: #4b5563;
 }
+
+/* ---------------------------------------------------------------
+ * Tab switcher
+ * --------------------------------------------------------------- */
+
+.tab-btn {
+  color: #6b7280;
+  background: transparent;
+}
+
+.tab-btn:hover:not(.tab-active) {
+  color: #374151;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.dark .tab-btn {
+  color: #9ca3af;
+}
+
+.dark .tab-btn:hover:not(.tab-active) {
+  color: #d1d5db;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tab-btn.tab-active {
+  color: #111827;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.dark .tab-btn.tab-active {
+  color: #f3f4f6;
+  background: #374151;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* ---------------------------------------------------------------
+ * Skills card
+ * --------------------------------------------------------------- */
+
+.skill-card {
+  transition: all 0.15s ease;
+}
+
+.skill-card:hover {
+  transform: translateY(-1px);
+}
+
+.skill-card .line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------
+ * Skill download button hover
+ * --------------------------------------------------------------- */
+
+.skill-download-btn:hover {
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45);
+  transform: translateY(-1px);
+}
+
+.skill-download-btn:active {
+  transform: translateY(0);
+}
+
+/* ---------------------------------------------------------------
+ * Skill install command
+ * --------------------------------------------------------------- */
+
+.skill-install-cmd {
+  scrollbar-width: thin;
+}
+
+.skill-install-cmd::-webkit-scrollbar {
+  height: 4px;
+}
+
+.skill-install-cmd::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------
+ * Dark mode skill upload dialog
+ * --------------------------------------------------------------- */
+
+.dark #skill-upload-dialog .dialog-card [style*="linear-gradient(135deg,#f3e8ff"] {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(37, 99, 235, 0.08)) !important;
+}
+
+.dark #skill-upload-dialog #skill-author-input {
+  border-color: #4b5563 !important;
+}
+
+.dark #skill-upload-dialog #skill-author-input:focus {
+  border-color: #8b5cf6 !important;
+}
+
+#skill-author-input:focus {
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
+}
+
+.dark #skill-author-input:focus {
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+}
+
+.dark #skill-upload-error {
+  background: rgba(127, 29, 29, 0.2) !important;
+  border-color: rgba(185, 28, 28, 0.3) !important;
+}

@@ -140,6 +140,42 @@ Streamable HTTP トランスポートで動作し、`http://localhost:8081/mcp` 
 }
 ```
 
+## End-to‑End テスト (Playwright CLI)
+
+このプロジェクトでは [Playwright CLI](https://github.com/microsoft/playwright-cli) を使ってブラウザの自動化やエンドツーエンドのテストができます。
+
+### セットアップ
+
+1. Node 18 以上がインストールされていることを確認します。
+2. ルートディレクトリで依存関係をインストールします:
+
+   ```bash
+   npm install
+   ```
+
+3. Playwright のコマンドラインツールとスキルを取得します:
+
+   ```bash
+   npm run e2e:install
+   ```
+
+> `playwright-cli` はグローバルにインストールされていなくても `npx` 経由で実行できます。
+
+### 使い方
+
+- 開発サーバーを立ち上げたあと、簡単な操作を試すには:
+  ```bash
+  npm run e2e:open           # ブラウザを起動して http://localhost:8080 を開く
+  npm run e2e                # スクリーンショットを撮る簡単なワンライナー
+  ```
+
+- `playwright-cli --help` で利用可能なコマンドやスキルの一覧を参照します。
+- 出力アーティファクトはデフォルトで `playwright-artifacts/` ディレクトリに保存されます。
+
+### コンフィグレーション
+
+`.playwright/cli.config.json` にはデフォルトのブラウザ、出力先などを記述済みです。必要に応じて調整してください。
+
 ## プロジェクト構成
 
 ```

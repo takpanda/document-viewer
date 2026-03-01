@@ -10,3 +10,11 @@ dist/
 build/
 .DS_Store
 .playwright-mcp/
+# Node.js / Playwright CLI
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+
+# Playwright artifacts
+playwright-artifacts/
+

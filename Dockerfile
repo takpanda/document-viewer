@@ -4,6 +4,7 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UPLOAD_DIR=/app/uploads \
+    SKILLS_DIR=/app/skills \
     MAX_UPLOAD_SIZE=52428800
 
 # Install curl for healthcheck
@@ -22,8 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create uploads directory and set permissions
-RUN mkdir -p /app/uploads && chown -R appuser:appuser /app
+# Create uploads and skills directories and set permissions
+RUN mkdir -p /app/uploads /app/skills && chown -R appuser:appuser /app
 
 USER appuser
 
