@@ -600,6 +600,18 @@ def delete_skill(author: str, name: str):
     return jsonify({"message": "スキルを削除しました"})
 
 
+@app.route("/api/skills/<author>/<name>/like", methods=["POST"])
+def like_skill(author: str, name: str):
+    """Increment the like counter for a skill."""
+    metadata = _load_metadata()
+    entry = next((s for s in metadata if s["author"] == author and s["skill_name"] == name), None)
+    if not entry:
+        abort(404, description="スキルが見つかりません")
+    entry["likes"] = entry.get("likes", 0) + 1
+    _save_metadata(metadata)
+    return jsonify({"likes": entry["likes"]})
+
+
 # ---------------------------------------------------------------------------
 # Development entry-point
 # ---------------------------------------------------------------------------

@@ -4,8 +4,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - uploads_data:/app/uploads
-      - skills_data:/app/skills
+      - ./data/uploads_data:/app/uploads
+      - ./data/skills_data:/app/skills
     environment:
       - FLASK_ENV=production
       - UPLOAD_DIR=/app/uploads
@@ -24,8 +24,8 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - uploads_data:/app/uploads
-      - skills_data:/app/skills
+      - ./data/uploads_data:/app/uploads
+      - ./data/skills_data:/app/skills
     environment:
       - UPLOAD_DIR=/app/uploads
       - SKILLS_DIR=/app/skills

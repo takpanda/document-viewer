@@ -10,6 +10,66 @@ const Skills = (() => {
   let _skills = [];
   let _selectedSkill = null;
 
+  /* ---- Likes ---- */
+  const LIKED_KEY = "skill-likes";
+
+  function _getLikedSet() {
+    try { return new Set(JSON.parse(localStorage.getItem(LIKED_KEY) || "[]")); }
+    catch (_) { return new Set(); }
+  }
+
+  function _isLiked(author, skillName) {
+    return _getLikedSet().has(`${author}/${skillName}`);
+  }
+
+  function _setLiked(author, skillName) {
+    const s = _getLikedSet();
+    s.add(`${author}/${skillName}`);
+    localStorage.setItem(LIKED_KEY, JSON.stringify([...s]));
+  }
+
+  async function _likeSkill(author, skillName) {
+    if (_isLiked(author, skillName)) return;
+
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(author)}/${encodeURIComponent(skillName)}/like`, {
+        method: "POST",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      _setLiked(author, skillName);
+
+      // Update cached skill data
+      const cached = _skills.find(s => s.author === author && s.skill_name === skillName);
+      if (cached) cached.likes = data.likes;
+
+      _updateLikeButtons(author, skillName, data.likes);
+    } catch (err) {
+      console.error("Like error:", err);
+    }
+  }
+
+  function _updateLikeButtons(author, skillName, newCount) {
+    // Card button
+    const cardBtn = skillsList.querySelector(
+      `.skill-like-btn[data-author="${author}"][data-skill-name="${skillName}"]`
+    );
+    if (cardBtn) {
+      cardBtn.querySelector(".skill-like-count").textContent = newCount;
+      cardBtn.classList.remove("text-gray-400", "hover:text-pink-400");
+      cardBtn.classList.add("text-pink-500");
+      cardBtn.querySelector("svg").setAttribute("fill", "currentColor");
+    }
+    // Detail page button
+    const detailBtn = skillDetailPane.querySelector(".skill-like-btn");
+    if (detailBtn) {
+      detailBtn.querySelector(".skill-like-count").textContent = newCount;
+      detailBtn.classList.remove("border-gray-200", "dark:border-gray-700", "text-gray-600", "dark:text-gray-400", "hover:bg-gray-50", "dark:hover:bg-gray-800/50");
+      detailBtn.classList.add("border-pink-300", "dark:border-pink-700", "text-pink-600", "dark:text-pink-400", "bg-pink-50", "dark:bg-pink-900/20");
+      detailBtn.querySelector("svg").setAttribute("fill", "currentColor");
+    }
+  }
+
   /* ---- DOM references ---- */
   const skillsList = document.getElementById("skills-list");
   const skillsEmpty = document.getElementById("skills-empty");
@@ -70,6 +130,7 @@ const Skills = (() => {
     card.dataset.author = skill.author;
     card.dataset.skillName = skill.skill_name;
 
+    const liked = _isLiked(skill.author, skill.skill_name);
     card.innerHTML = `
       <div class="flex items-start gap-2">
         <div class="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 bg-gradient-to-br from-violet-500/20 to-blue-500/20 dark:from-violet-500/30 dark:to-blue-500/30">
@@ -81,9 +142,22 @@ const Skills = (() => {
           </div>
           <div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">${_esc(skill.author)}</div>
           ${skill.description ? `<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">${_esc(skill.description)}</p>` : ""}
+          <div class="flex items-center mt-1.5">
+            <button class="skill-like-btn flex items-center gap-0.5 text-xs rounded px-1 py-0.5 ${liked ? "text-pink-500" : "text-gray-400 hover:text-pink-400"} transition-colors"
+                    data-author="${_esc(skill.author)}" data-skill-name="${_esc(skill.skill_name)}">
+              <svg class="w-3 h-3" fill="${liked ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V2.75a.75.75 0 01.75-.75 2.25 2.25 0 012.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.25M6.633 10.25H5.25a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25h1.383z"/></svg>
+              <span class="skill-like-count">${skill.likes || 0}</span>
+            </button>
+          </div>
         </div>
       </div>
     `;
+
+    const likeBtn = card.querySelector(".skill-like-btn");
+    likeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _likeSkill(skill.author, skill.skill_name);
+    });
 
     card.addEventListener("click", () => _selectSkill(skill));
     return card;
@@ -155,6 +229,11 @@ const Skills = (() => {
 
         <!-- Action buttons -->
         <div class="flex flex-wrap gap-3 mt-6 mb-8">
+          <button class="skill-like-btn inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border ${_isLiked(skill.author, skill.skill_name) ? "border-pink-300 dark:border-pink-700 text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-900/20" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"} transition-colors">
+            <svg class="w-4 h-4" fill="${_isLiked(skill.author, skill.skill_name) ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.633 10.25c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V2.75a.75.75 0 01.75-.75 2.25 2.25 0 012.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282m0 0h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H13.48c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23H5.25M6.633 10.25H5.25a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25h1.383z"/></svg>
+            いいね
+            <span class="skill-like-count font-semibold">${skill.likes || 0}</span>
+          </button>
           <a href="/api/skills/${encodeURIComponent(skill.author)}/${encodeURIComponent(skill.skill_name)}/download"
              class="skill-download-btn inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl transition-all duration-150"
              style="background:#3b82f6;box-shadow:0 4px 14px rgba(59,130,246,0.35)">
@@ -214,6 +293,12 @@ const Skills = (() => {
         ` : ""}
       </div>
     `;
+
+    // Wire up like button
+    const likeBtn = skillDetailPane.querySelector(".skill-like-btn");
+    if (likeBtn) {
+      likeBtn.addEventListener("click", () => _likeSkill(skill.author, skill.skill_name));
+    }
 
     // Wire up copy button
     const copyBtn = skillDetailPane.querySelector(".skill-copy-cmd");
