@@ -18,6 +18,7 @@ from mcp.server.fastmcp import FastMCP
 # ---------------------------------------------------------------------------
 
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "/app/uploads"))
+SKILLS_DIR = Path(os.environ.get("SKILLS_DIR", "/app/skills"))
 MCP_PORT = int(os.environ.get("MCP_PORT", "8081"))
 
 mcp = FastMCP(
@@ -26,6 +27,8 @@ mcp = FastMCP(
         "このMCPサーバーは、Document Viewerにアップロードされたドキュメントへのアクセスを提供します。"
         "list_documents でファイル一覧を取得し、read_document でファイル内容を読み、"
         "search_documents でキーワード検索ができます。"
+        "また、共有されたGitHub Copilotスキルの検索・閲覧も可能です。"
+        "list_skills でスキル一覧、search_skills で検索、get_skill_info で詳細を取得できます。"
     ),
     host="0.0.0.0",
     port=MCP_PORT,
@@ -311,6 +314,209 @@ def resource_tree() -> str:
 def resource_file(path: str) -> str:
     """個別ファイルの内容を返すリソース"""
     return read_document(path)
+
+
+# ---------------------------------------------------------------------------
+# Skills – Helpers
+# ---------------------------------------------------------------------------
+
+SKILLS_METADATA_FILE = SKILLS_DIR / "metadata.json"
+
+
+def _load_skills_metadata() -> list[dict]:
+    """Load the skills metadata index."""
+    if SKILLS_METADATA_FILE.is_file():
+        try:
+            import json
+            return json.loads(SKILLS_METADATA_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return []
+
+
+def _safe_skill_resolve(author: str, name: str, extra: str = "") -> Path:
+    """Resolve a path under SKILLS_DIR/{author}/{name}, guarding traversal."""
+    base = SKILLS_DIR / author / name
+    if extra:
+        resolved = (base / extra).resolve()
+    else:
+        resolved = base.resolve()
+    if not str(resolved).startswith(str(SKILLS_DIR.resolve())):
+        raise ValueError("Access denied: path traversal detected")
+    return resolved
+
+
+# ---------------------------------------------------------------------------
+# Skills – Tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def list_skills(query: str = "") -> str:
+    """共有されたGitHub Copilotスキルの一覧を取得します。
+
+    Args:
+        query: 検索キーワード（省略で全件取得）。スキル名、説明、投稿者名を検索対象とします。
+    """
+    import json
+
+    metadata = _load_skills_metadata()
+
+    if query:
+        q = query.lower()
+        metadata = [
+            s for s in metadata
+            if q in s.get("name", "").lower()
+            or q in s.get("description", "").lower()
+            or q in s.get("author", "").lower()
+        ]
+
+    if not metadata:
+        return "共有されたスキルはありません" if not query else f"'{query}' に一致するスキルは見つかりませんでした"
+
+    # Return summary without file lists for brevity
+    summary = []
+    for s in metadata:
+        summary.append({
+            "author": s.get("author"),
+            "skill_name": s.get("skill_name"),
+            "name": s.get("name"),
+            "description": s.get("description", ""),
+            "uploaded_at": s.get("uploaded_at"),
+        })
+
+    return json.dumps(summary, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def get_skill_info(author: str, skill_name: str) -> str:
+    """指定されたスキルの詳細情報とSKILL.mdの内容を取得します。
+
+    Args:
+        author: スキルの投稿者名
+        skill_name: スキル名
+    """
+    import json
+
+    try:
+        skill_dir = _safe_skill_resolve(author, skill_name)
+    except ValueError as e:
+        return str(e)
+
+    if not skill_dir.is_dir():
+        return f"エラー: スキル '{author}/{skill_name}' が見つかりません"
+
+    metadata = _load_skills_metadata()
+    entry = next((s for s in metadata if s.get("author") == author and s.get("skill_name") == skill_name), None)
+
+    # Read SKILL.md content
+    skill_md = skill_dir / "SKILL.md"
+    md_content = ""
+    if skill_md.is_file():
+        try:
+            md_content = skill_md.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            md_content = "(読み取りに失敗しました)"
+
+    # Collect file list
+    files = []
+    for p in sorted(skill_dir.rglob("*")):
+        if p.is_file() and not p.name.startswith("."):
+            files.append(str(p.relative_to(skill_dir)))
+
+    result = {
+        "author": author,
+        "skill_name": skill_name,
+        "name": entry.get("name", skill_name) if entry else skill_name,
+        "description": entry.get("description", "") if entry else "",
+        "uploaded_at": entry.get("uploaded_at") if entry else None,
+        "files": files,
+        "skill_md_content": md_content,
+    }
+
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def search_skills(query: str) -> str:
+    """スキルのSKILL.md内をキーワード検索します。
+
+    Args:
+        query: 検索キーワード（正規表現対応）
+    """
+    import json
+
+    if not query:
+        return "エラー: 検索キーワードを指定してください"
+
+    try:
+        pattern = re.compile(query, re.IGNORECASE)
+    except re.error:
+        pattern = re.compile(re.escape(query), re.IGNORECASE)
+
+    metadata = _load_skills_metadata()
+    results = []
+
+    for skill in metadata:
+        author = skill.get("author", "")
+        name = skill.get("skill_name", "")
+        try:
+            skill_dir = _safe_skill_resolve(author, name)
+        except ValueError:
+            continue
+
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.is_file():
+            continue
+
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+
+        lines = content.splitlines()
+        matches = []
+        for i, line in enumerate(lines, 1):
+            if pattern.search(line):
+                matches.append({"line": i, "text": line.strip()})
+
+        if matches:
+            results.append({
+                "author": author,
+                "skill_name": name,
+                "name": skill.get("name", name),
+                "match_count": len(matches),
+                "matches": matches[:5],
+            })
+
+    if not results:
+        return f"'{query}' に一致するスキルは見つかりませんでした"
+
+    results.sort(key=lambda r: r["match_count"], reverse=True)
+
+    output = {
+        "query": query,
+        "skills_matched": len(results),
+        "results": results[:20],
+    }
+    return json.dumps(output, ensure_ascii=False, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Skills – Resources
+# ---------------------------------------------------------------------------
+
+
+@mcp.resource("skills://list")
+def resource_skills_list() -> str:
+    """共有スキル一覧を返すリソース"""
+    return list_skills()
+
+
+@mcp.resource("skills://skill/{author}/{name}")
+def resource_skill(author: str, name: str) -> str:
+    """個別スキルの詳細を返すリソース"""
+    return get_skill_info(author, name)
 
 
 # ---------------------------------------------------------------------------

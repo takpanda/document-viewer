@@ -6,10 +6,16 @@ Users upload a folder of documents via the browser, and the app
 renders them with GitHub-flavored Markdown + Mermaid diagram support.
 """
 
+import io
+import json
 import os
+import re
 import shutil
+import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
 from flask import Flask, jsonify, render_template, request, send_file, abort
 
 # ---------------------------------------------------------------------------
@@ -19,6 +25,7 @@ from flask import Flask, jsonify, render_template, request, send_file, abort
 app = Flask(__name__)
 
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", os.path.join(app.root_path, "uploads")))
+SKILLS_DIR = Path(os.environ.get("SKILLS_DIR", os.path.join(app.root_path, "skills")))
 MAX_UPLOAD_SIZE = int(os.environ.get("MAX_UPLOAD_SIZE", 50 * 1024 * 1024))  # 50 MB
 
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE
@@ -36,6 +43,7 @@ def add_no_cache_headers(response):
 
 # Ensure upload directory exists
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+SKILLS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Allowed image extensions (served as binary)
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp"}
@@ -328,6 +336,267 @@ def clear_files():
         shutil.rmtree(UPLOAD_DIR)
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     return jsonify({"message": "All files cleared"})
+
+
+# ---------------------------------------------------------------------------
+# Skills – Helpers
+# ---------------------------------------------------------------------------
+
+METADATA_FILE = SKILLS_DIR / "metadata.json"
+
+
+def _safe_skill_path(author: str, name: str, extra: str = "") -> Path:
+    """Resolve a path under SKILLS_DIR/{author}/{name} and guard against traversal."""
+    base = SKILLS_DIR / author / name
+    if extra:
+        resolved = (base / extra).resolve()
+    else:
+        resolved = base.resolve()
+    if not str(resolved).startswith(str(SKILLS_DIR.resolve())):
+        abort(403, description="Access denied")
+    return resolved
+
+
+def _load_metadata() -> list[dict]:
+    """Load the skills metadata index."""
+    if METADATA_FILE.is_file():
+        try:
+            return json.loads(METADATA_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return []
+
+
+def _save_metadata(data: list[dict]) -> None:
+    """Persist the skills metadata index."""
+    METADATA_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _parse_frontmatter(text: str) -> dict:
+    """Extract YAML front matter from a Markdown file."""
+    match = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
+    if match:
+        try:
+            return yaml.safe_load(match.group(1)) or {}
+        except yaml.YAMLError:
+            pass
+    return {}
+
+
+def _collect_files(directory: Path) -> list[str]:
+    """Return a list of relative file paths inside *directory*."""
+    files = []
+    for p in sorted(directory.rglob("*")):
+        if p.is_file() and not p.name.startswith("."):
+            files.append(str(p.relative_to(directory)))
+    return files
+
+
+def _validate_slug(value: str) -> bool:
+    """Check that a value is a safe slug (alphanumeric, hyphens, underscores)."""
+    return bool(re.match(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*$', value))
+
+
+# ---------------------------------------------------------------------------
+# Skills – API
+# ---------------------------------------------------------------------------
+
+
+@app.route("/api/skills", methods=["GET"])
+def list_skills():
+    """Return all shared skills."""
+    q = (request.args.get("q") or "").strip().lower()
+    metadata = _load_metadata()
+    if q:
+        metadata = [
+            s for s in metadata
+            if q in s.get("name", "").lower()
+            or q in s.get("description", "").lower()
+            or q in s.get("author", "").lower()
+        ]
+    return jsonify(metadata)
+
+
+@app.route("/api/skills/upload", methods=["POST"])
+def upload_skill():
+    """Upload a skill folder.
+
+    Form fields:
+      - author: publisher name (slug)
+      - files[]: skill files
+      - paths[]: relative paths (webkitRelativePath)
+    """
+    author = (request.form.get("author") or "").strip()
+    files = request.files.getlist("files[]")
+    paths = request.form.getlist("paths[]")
+
+    if not author:
+        return jsonify({"error": "投稿者名が指定されていません"}), 400
+    if not _validate_slug(author):
+        return jsonify({"error": "投稿者名に使用できない文字が含まれています（英数字・ハイフン・アンダースコアのみ）"}), 400
+    if not files:
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+
+    # Determine the skill folder name from the first path
+    # paths[] look like: "skill-name/SKILL.md", "skill-name/data/foo.txt"
+    skill_name = None
+    for rel_path in paths:
+        parts = rel_path.replace("\\", "/").split("/")
+        if len(parts) >= 1 and parts[0]:
+            skill_name = parts[0]
+            break
+
+    if not skill_name:
+        return jsonify({"error": "スキルフォルダ名を特定できません"}), 400
+    if not _validate_slug(skill_name):
+        return jsonify({"error": "スキルフォルダ名に使用できない文字が含まれています"}), 400
+
+    skill_dir = _safe_skill_path(author, skill_name)
+
+    # Save files
+    saved = 0
+    for file_storage, rel_path in zip(files, paths):
+        if not rel_path:
+            continue
+        # Strip the top-level skill folder from path so files go directly into skill_dir
+        parts = rel_path.replace("\\", "/").split("/", 1)
+        inner_path = parts[1] if len(parts) > 1 else parts[0]
+        dest = (skill_dir / inner_path).resolve()
+        # Guard against traversal
+        if not str(dest).startswith(str(SKILLS_DIR.resolve())):
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        file_storage.save(dest)
+        saved += 1
+
+    if saved == 0:
+        return jsonify({"error": "ファイルを保存できませんでした"}), 400
+
+    # Parse SKILL.md frontmatter for metadata
+    skill_md = skill_dir / "SKILL.md"
+    fm = {}
+    if skill_md.is_file():
+        try:
+            fm = _parse_frontmatter(skill_md.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            pass
+
+    # Update metadata index
+    metadata = _load_metadata()
+    # Remove existing entry with same author/name
+    metadata = [s for s in metadata if not (s["author"] == author and s["skill_name"] == skill_name)]
+    entry = {
+        "author": author,
+        "skill_name": skill_name,
+        "name": fm.get("name", skill_name),
+        "description": fm.get("description", ""),
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "files": _collect_files(skill_dir),
+    }
+    metadata.append(entry)
+    _save_metadata(metadata)
+
+    return jsonify({"message": f"スキル '{skill_name}' をアップロードしました", "skill": entry}), 201
+
+
+@app.route("/api/skills/<author>/<name>", methods=["GET"])
+def get_skill(author: str, name: str):
+    """Return skill metadata and file tree."""
+    skill_dir = _safe_skill_path(author, name)
+    if not skill_dir.is_dir():
+        abort(404, description="スキルが見つかりません")
+
+    metadata = _load_metadata()
+    entry = next((s for s in metadata if s["author"] == author and s["skill_name"] == name), None)
+    if not entry:
+        # Rebuild entry from disk
+        skill_md = skill_dir / "SKILL.md"
+        fm = {}
+        if skill_md.is_file():
+            try:
+                fm = _parse_frontmatter(skill_md.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError):
+                pass
+        entry = {
+            "author": author,
+            "skill_name": name,
+            "name": fm.get("name", name),
+            "description": fm.get("description", ""),
+            "uploaded_at": None,
+            "files": _collect_files(skill_dir),
+        }
+
+    return jsonify(entry)
+
+
+@app.route("/api/skills/<author>/<name>/file/<path:filepath>", methods=["GET"])
+def get_skill_file(author: str, name: str, filepath: str):
+    """Return a single file inside a skill."""
+    resolved = _safe_skill_path(author, name, filepath)
+    if not resolved.is_file():
+        abort(404, description="File not found")
+
+    suffix = resolved.suffix.lower()
+    if suffix in IMAGE_EXTENSIONS:
+        return send_file(resolved)
+
+    try:
+        content = resolved.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return send_file(resolved)
+
+    return content, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+@app.route("/api/skills/<author>/<name>/download", methods=["GET"])
+def download_skill(author: str, name: str):
+    """Download a skill as a ZIP file.
+
+    The ZIP is structured so that extracting it to ~/.agents/skills/
+    creates the correct directory layout:
+      {skill_name}/SKILL.md
+      {skill_name}/data/...
+    """
+    skill_dir = _safe_skill_path(author, name)
+    if not skill_dir.is_dir():
+        abort(404, description="スキルが見つかりません")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fpath in sorted(skill_dir.rglob("*")):
+            if fpath.is_file() and not fpath.name.startswith("."):
+                arcname = f"{name}/{fpath.relative_to(skill_dir)}"
+                zf.write(fpath, arcname)
+    buf.seek(0)
+
+    return send_file(
+        buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"{name}.zip",
+    )
+
+
+@app.route("/api/skills/<author>/<name>", methods=["DELETE"])
+def delete_skill(author: str, name: str):
+    """Delete a shared skill."""
+    skill_dir = _safe_skill_path(author, name)
+    if not skill_dir.is_dir():
+        abort(404, description="スキルが見つかりません")
+
+    shutil.rmtree(skill_dir)
+
+    # Clean up empty author directory
+    author_dir = SKILLS_DIR / author
+    if author_dir.is_dir() and not any(author_dir.iterdir()):
+        author_dir.rmdir()
+
+    # Update metadata
+    metadata = _load_metadata()
+    metadata = [s for s in metadata if not (s["author"] == author and s["skill_name"] == name)]
+    _save_metadata(metadata)
+
+    return jsonify({"message": "スキルを削除しました"})
 
 
 # ---------------------------------------------------------------------------

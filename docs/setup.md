@@ -56,5 +56,26 @@ pip install -r requirements.txt
 python app.py
 ```
 
+### エンドツーエンドテスト
+
+Playwright CLI を利用した E2E テスト環境を用意しています。Node.js 18 以上が必要です。
+
+```bash
+# 依存関係をインストール
+npm install
+
+# Playwright CLI スキルを取得
+npm run e2e:install
+```
+
+コンテナを使用する場合、ホストに Node をインストールするか、付属の `e2e` サービスを使います。例えばアプリとMCPを起動後に:
+
+```bash
+docker compose run --rm e2e
+```
+
+サービスはリポジトリをマウントし、`npm install` → `npm run e2e` を実行します。テストコマンドは `package.json` で変更できます。
+
+
 > **注意**: 開発サーバー (`python app.py`) は本番環境では使用しないでください。
 > 本番環境では Gunicorn + Docker を使用します。

@@ -9,9 +9,11 @@ const App = (() => {
   /* ---- DOM references ---- */
 
   const btnUpload = document.getElementById("btn-upload");
+  const btnUploadSkill = document.getElementById("btn-upload-skill");
   const btnTheme = document.getElementById("btn-theme");
   const btnSidebarToggle = document.getElementById("btn-sidebar-toggle");
   const folderInput = document.getElementById("folder-input");
+  const skillFolderInput = document.getElementById("skill-folder-input");
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebar-overlay");
   const resizeHandle = document.getElementById("resize-handle");
@@ -19,6 +21,23 @@ const App = (() => {
   const uploadProgress = document.getElementById("upload-progress");
   const uploadStatus = document.getElementById("upload-status");
   const uploadBar = document.getElementById("upload-bar");
+
+  /* Tab elements */
+  const tabDocs = document.getElementById("tab-docs");
+  const tabSkills = document.getElementById("tab-skills");
+  const panelDocs = document.getElementById("panel-docs");
+  const panelSkills = document.getElementById("panel-skills");
+
+  /* Skill upload dialog */
+  const skillUploadDialog = document.getElementById("skill-upload-dialog");
+  const skillAuthorInput = document.getElementById("skill-author-input");
+  const skillUploadError = document.getElementById("skill-upload-error");
+  const skillUploadErrorText = document.getElementById("skill-upload-error-text");
+  const skillUploadCancel = document.getElementById("skill-upload-cancel");
+  const skillUploadSelect = document.getElementById("skill-upload-select");
+
+  /* ---- Current mode ---- */
+  let _mode = "docs"; // "docs" | "skills"
 
   /* ==================================================================
    *  Folder upload
@@ -82,6 +101,155 @@ const App = (() => {
 
     // Reset input so the same folder can be re-selected
     folderInput.value = "";
+  });
+
+  /* ==================================================================
+   *  Tab switching – Documents / Skills
+   * ================================================================== */
+
+  function _switchMode(mode) {
+    _mode = mode;
+
+    // Update tab styles
+    tabDocs.classList.toggle("tab-active", mode === "docs");
+    tabSkills.classList.toggle("tab-active", mode === "skills");
+
+    // Toggle panels
+    panelDocs.classList.toggle("hidden", mode !== "docs");
+    panelSkills.classList.toggle("hidden", mode !== "skills");
+
+    // Toggle header buttons
+    btnUpload.classList.toggle("hidden", mode !== "docs");
+    btnUploadSkill.classList.toggle("hidden", mode !== "skills");
+
+    // Reset preview pane
+    const previewWelcome = document.getElementById("preview-welcome");
+    const previewContent = document.getElementById("preview-content");
+    const skillDetailPane = document.getElementById("skill-detail-pane");
+    const breadcrumb = document.getElementById("breadcrumb");
+
+    previewWelcome.classList.remove("hidden");
+    previewContent.classList.add("hidden");
+    skillDetailPane.classList.add("hidden");
+    breadcrumb.classList.add("hidden");
+
+    if (mode === "skills") {
+      Skills.load();
+    }
+  }
+
+  tabDocs.addEventListener("click", () => _switchMode("docs"));
+  tabSkills.addEventListener("click", () => _switchMode("skills"));
+
+  /* ==================================================================
+   *  Skill upload
+   * ================================================================== */
+
+  /** Stored author name for the upload flow */
+  let _skillAuthor = localStorage.getItem("skill-author") || "";
+
+  btnUploadSkill.addEventListener("click", () => {
+    skillAuthorInput.value = _skillAuthor;
+    skillUploadError.classList.add("hidden");
+    skillUploadDialog.classList.remove("hidden");
+    setTimeout(() => {
+      if (!_skillAuthor) skillAuthorInput.focus();
+    }, 50);
+  });
+
+  skillUploadCancel.addEventListener("click", () => {
+    skillUploadDialog.classList.add("hidden");
+  });
+
+  skillUploadDialog.addEventListener("click", (e) => {
+    if (e.target === skillUploadDialog || e.target.classList.contains("dialog-overlay")) {
+      skillUploadDialog.classList.add("hidden");
+    }
+  });
+
+  skillAuthorInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") skillUploadDialog.classList.add("hidden");
+    if (e.key === "Enter") skillUploadSelect.click();
+  });
+
+  skillUploadSelect.addEventListener("click", () => {
+    const author = skillAuthorInput.value.trim();
+    if (!author) {
+      skillUploadErrorText.textContent = "投稿者名を入力してください";
+      skillUploadError.classList.remove("hidden");
+      return;
+    }
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(author)) {
+      skillUploadErrorText.textContent = "英数字・ハイフン・アンダースコアのみ使用できます";
+      skillUploadError.classList.remove("hidden");
+      return;
+    }
+
+    _skillAuthor = author;
+    localStorage.setItem("skill-author", author);
+    skillUploadDialog.classList.add("hidden");
+    skillFolderInput.click();
+  });
+
+  skillFolderInput.addEventListener("change", async (e) => {
+    const files = e.target.files;
+    if (!files || !files.length) return;
+
+    // Show progress
+    uploadProgress.classList.remove("hidden");
+    uploadBar.style.width = "0%";
+    uploadStatus.textContent = `スキルをアップロード中… (${files.length} ファイル)`;
+
+    const formData = new FormData();
+    formData.append("author", _skillAuthor);
+    for (const file of files) {
+      formData.append("files[]", file);
+      formData.append("paths[]", file.webkitRelativePath);
+    }
+
+    try {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener("progress", (ev) => {
+        if (ev.lengthComputable) {
+          const pct = Math.round((ev.loaded / ev.total) * 100);
+          uploadBar.style.width = `${pct}%`;
+          uploadStatus.textContent = `スキルをアップロード中… ${pct}%`;
+        }
+      });
+
+      await new Promise((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              reject(new Error(data.error || `Upload failed: ${xhr.status}`));
+            } catch (_) {
+              reject(new Error(`Upload failed: ${xhr.status}`));
+            }
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.open("POST", "/api/skills/upload");
+        xhr.send(formData);
+      });
+
+      uploadStatus.textContent = "スキルのアップロード完了！";
+      uploadBar.style.width = "100%";
+
+      // Reload skills
+      await Skills.load();
+
+      setTimeout(() => uploadProgress.classList.add("hidden"), 1500);
+    } catch (err) {
+      console.error("Skill upload error:", err);
+      uploadStatus.textContent = `エラー: ${err.message}`;
+      uploadBar.style.width = "0%";
+      setTimeout(() => uploadProgress.classList.add("hidden"), 3000);
+    }
+
+    skillFolderInput.value = "";
   });
 
   /* ==================================================================
@@ -496,5 +664,8 @@ const App = (() => {
   // Load tree on page load (may have persisted uploads from Docker volume)
   Tree.load();
 
-  return { toggleSidebar };
+  // Also load skills in background for quick tab switching
+  Skills.load();
+
+  return { toggleSidebar, switchMode: _switchMode };
 })();
