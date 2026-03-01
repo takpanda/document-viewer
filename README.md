@@ -49,6 +49,10 @@ docker compose up --build
 - Web UI: **http://localhost:8080**
 - MCP エンドポイント: **http://localhost:8081/mcp**
 
+※Docker コンテナの `healthcheck` は POST リクエストに
+`Content-Type: application/json` を付け、空の JSON ボディを送信する
+必要があります。設定が不適切だと 400 Bad Request が出力されます。
+
 ### ローカル開発
 
 ```bash
@@ -98,6 +102,14 @@ LLMがアップロードされたドキュメントにアクセスするため�
 Streamable HTTP トランスポートで動作し、`http://localhost:8081/mcp` で接続できます。
 
 ### MCP Tools
+
+> **ヘルスチェックに関する補足**
+>
+> FastMCP はストリーム可能 HTTP トランスポートで動作し、
+> POST リクエストに `Content-Type` ヘッダーが無いと 400 を返します。
+> Docker の `healthcheck` や外部モニタは必ず `-H "Content-Type: application/json"` と
+> `-d '{}'` を付けてください。
+
 
 | Tool | 説明 | パラメータ |
 |------|------|------------|
