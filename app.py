@@ -241,6 +241,25 @@ def get_file(filepath: str):
     return content, 200, {"Content-Type": "text/plain; charset=utf-8"}
 
 
+@app.route("/api/html-preview/<path:filepath>")
+def get_html_preview(filepath: str):
+    """Return an HTML file with text/html content type for iframe preview."""
+    resolved = _safe_path(filepath)
+
+    if not resolved.is_file():
+        abort(404, description="File not found")
+
+    if resolved.suffix.lower() not in (".html", ".htm"):
+        abort(400, description="Not an HTML file")
+
+    try:
+        content = resolved.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        abort(400, description="File is not valid UTF-8")
+
+    return content, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
 @app.route("/api/item", methods=["DELETE"])
 def delete_item():
     """Delete a single file or folder.
