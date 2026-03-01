@@ -214,6 +214,8 @@ const Preview = (() => {
       // State
       let scale = 1, tx = 0, ty = 0;
       let isDragging = false, lastX = 0, lastY = 0;
+      let wheelEnabled = false; // ホイールズームのON/OFF
+      let hasMoved = false;     // ドラッグ判定用
       // Touch
       let lastTouchDist = null;
       let lastTouchMidX = 0, lastTouchMidY = 0;
@@ -245,8 +247,23 @@ const Preview = (() => {
         applyTransform();
       }
 
+      // ---- Wheel zoom toggle ----
+      function toggleWheelZoom(on) {
+        wheelEnabled = (on !== undefined) ? on : !wheelEnabled;
+        container.classList.toggle("mermaid-zoom-active", wheelEnabled);
+      }
+
+      // 図の外クリックで解除
+      const _outsideClickHandler = (e) => {
+        if (wheelEnabled && !container.contains(e.target)) {
+          toggleWheelZoom(false);
+        }
+      };
+      document.addEventListener("mousedown", _outsideClickHandler);
+
       // ---- Wheel zoom ----
       container.addEventListener("wheel", (e) => {
+        if (!wheelEnabled) return; // 無効時はページスクロールに委ねる
         e.preventDefault();
         const factor = e.deltaY < 0 ? 1.1 : 0.9;
         zoomAt(e.clientX, e.clientY, factor);
@@ -256,6 +273,7 @@ const Preview = (() => {
       container.addEventListener("mousedown", (e) => {
         if (e.button !== 0) return;
         isDragging = true;
+        hasMoved = false;
         lastX = e.clientX;
         lastY = e.clientY;
         container.style.cursor = "grabbing";
@@ -263,8 +281,11 @@ const Preview = (() => {
       });
       window.addEventListener("mousemove", (e) => {
         if (!isDragging) return;
-        tx += e.clientX - lastX;
-        ty += e.clientY - lastY;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        if (!hasMoved && Math.hypot(dx, dy) > 4) hasMoved = true;
+        tx += dx;
+        ty += dy;
         lastX = e.clientX;
         lastY = e.clientY;
         applyTransform();
@@ -273,6 +294,8 @@ const Preview = (() => {
         if (!isDragging) return;
         isDragging = false;
         container.style.cursor = "grab";
+        // ドラッグなしのクリックでホイールズームをトグル
+        if (!hasMoved) toggleWheelZoom();
       });
 
       // ---- Double-click reset ----

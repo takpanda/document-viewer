@@ -311,9 +311,34 @@
 .markdown-body .mermaid:active {
   cursor: grabbing;
 }
+/* ホイールズームアクティブ状態 */
+.markdown-body .mermaid.mermaid-zoom-active {
+  border-color: #0969da;
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.25);
+}
+.markdown-body .mermaid.mermaid-zoom-active::after {
+  content: "ホイールズーム ON";
+  position: absolute;
+  bottom: 6px;
+  left: 10px;
+  font-size: 10px;
+  color: #0969da;
+  pointer-events: none;
+  opacity: 0.8;
+}
+.markdown-body .mermaid.mermaid-zoom-active .mermaid-toolbar {
+  opacity: 1;
+}
 .dark .markdown-body .mermaid {
   background-color: #0d1117;
   border-color: #30363d;
+}
+.dark .markdown-body .mermaid.mermaid-zoom-active {
+  border-color: #388bfd;
+  box-shadow: 0 0 0 3px rgba(56, 139, 253, 0.25);
+}
+.dark .markdown-body .mermaid.mermaid-zoom-active::after {
+  color: #388bfd;
 }
 
 .markdown-body .mermaid svg {
