@@ -125,7 +125,13 @@ const Skills = (() => {
     breadcrumbEl.classList.add("hidden");
 
     // Build detail HTML
-    const installCmd = `unzip ${skill.skill_name}.zip -d ~/.agents/skills/`;
+    // Choose a suitable extraction command depending on the user's OS. On Windows we
+    // recommend using PowerShell's Expand-Archive or the built-in explorer context
+    // menu, and the target directory is under %USERPROFILE% instead of ~/.
+    const isWindows = navigator.platform.startsWith("Win") || navigator.userAgent.includes("Windows");
+    const installCmd = isWindows
+      ? `powershell -Command "Expand-Archive -Path '${skill.skill_name}.zip' -DestinationPath $env:USERPROFILE\\.agents\\skills\\"`
+      : `unzip ${skill.skill_name}.zip -d ~/.agents/skills/`;
     const filesList = (skill.files || []).map(f => `<li class="text-xs text-gray-600 dark:text-gray-400 py-0.5 flex items-center gap-1.5">
       <svg class="w-3 h-3 text-gray-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
       ${_esc(f)}</li>`).join("");
@@ -170,7 +176,15 @@ const Skills = (() => {
           </h3>
           <ol class="text-sm text-gray-600 dark:text-gray-400 space-y-1 list-decimal list-inside">
             <li>上の「ZIPダウンロード」ボタンでZIPファイルを取得</li>
+            <li>ダウンロードしたZIPを展開します。</li>
+            ${isWindows ? `
+            <li>エクスプローラーで右クリックして「すべて展開」を選び、展開先に
+                <code class="text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700">%USERPROFILE%\\.agents\\skills\\</code>
+                を指定するか、PowerShellで以下を実行してください:
+            </li>
+            ` : `
             <li>以下のコマンドで <code class="text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700">~/.agents/skills/</code> に展開:</li>
+            `}
           </ol>
           <div class="mt-2 flex items-center gap-2">
             <code class="skill-install-cmd flex-1 text-xs px-3 py-2 rounded-lg bg-gray-900 dark:bg-gray-950 text-green-400 font-mono select-all overflow-x-auto">${_esc(installCmd)}</code>

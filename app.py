@@ -553,7 +553,8 @@ def download_skill(author: str, name: str):
     """Download a skill as a ZIP file.
 
     The ZIP is structured so that extracting it to ~/.agents/skills/
-    creates the correct directory layout:
+    (or %USERPROFILE%\\.agents\\skills\\ on Windows) creates the correct
+    directory layout:
       {skill_name}/SKILL.md
       {skill_name}/data/...
     """
