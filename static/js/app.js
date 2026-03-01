@@ -258,18 +258,26 @@ const App = (() => {
 
   const ctxNewFolder = document.getElementById("ctx-new-folder");
   const ctxUploadFiles = document.getElementById("ctx-upload-files");
+  const ctxRename = document.getElementById("ctx-rename");
   const folderDialog = document.getElementById("folder-dialog");
+  const folderDialogTitle = document.getElementById("folder-dialog-title");
   const folderNameInput = document.getElementById("folder-name-input");
   const folderDialogError = document.getElementById("folder-dialog-error");
   const folderDialogErrorText = document.getElementById("folder-dialog-error-text");
   const folderDialogParent = document.getElementById("folder-dialog-parent");
   const folderDialogCancel = document.getElementById("folder-dialog-cancel");
   const folderDialogCreate = document.getElementById("folder-dialog-create");
+  const folderDialogCreateLabel = document.getElementById("folder-dialog-create-label");
   const fileUploadInput = document.getElementById("file-upload-input");
   const btnNewRootFolder = document.getElementById("btn-new-root-folder");
 
   /** Tracks the parent path for the folder creation dialog */
   let _folderCreationParent = "";
+
+  /** Tracks rename mode state */
+  let _isRenaming = false;
+  let _renameTargetPath = "";
+  let _renameCurrentName = "";
 
   /** Open the "New Folder" dialog (from context menu) */
   ctxNewFolder.addEventListener("click", () => {
@@ -284,38 +292,72 @@ const App = (() => {
     _openFolderDialog();
   });
 
-  /** Shared helper to show the folder creation dialog */
-  function _openFolderDialog() {
-    folderNameInput.value = "";
+  /** Open the "Rename Folder" dialog (from context menu) */
+  ctxRename.addEventListener("click", () => {
+    Tree.hideContextMenu();
+    const targetPath = Tree.getContextPath();
+    if (!targetPath) return;
+    _renameTargetPath = targetPath;
+    _renameCurrentName = targetPath.split("/").pop();
+    _openFolderDialog({
+      renaming: true,
+      initialName: _renameCurrentName,
+      parentLabel: `変更対象: /${targetPath}/`,
+    });
+  });
+
+  /** Shared helper to show the folder creation/rename dialog.
+   * @param {object} opts
+   * @param {boolean} opts.renaming    – true = rename mode
+   * @param {string}  opts.initialName – pre-filled value (rename mode)
+   * @param {string}  opts.parentLabel – subtitle text   (rename mode)
+   */
+  function _openFolderDialog({ renaming = false, initialName = "", parentLabel = "" } = {}) {
+    _isRenaming = renaming;
+    folderNameInput.value = initialName;
     folderDialogError.classList.add("hidden");
-    folderDialogParent.textContent = _folderCreationParent
-      ? `作成先: /${_folderCreationParent}/`
-      : "作成先: / (ルート)";
+    if (renaming) {
+      folderDialogTitle.textContent = "フォルダ名を変更";
+      folderDialogCreateLabel.textContent = "変更する";
+      folderDialogParent.textContent = parentLabel;
+    } else {
+      folderDialogTitle.textContent = "新規フォルダ";
+      folderDialogCreateLabel.textContent = "作成する";
+      folderDialogParent.textContent = _folderCreationParent
+        ? `作成先: /${_folderCreationParent}/`
+        : "作成先: / (ルート)";
+    }
     folderDialog.classList.remove("hidden");
-    setTimeout(() => folderNameInput.focus(), 50);
+    setTimeout(() => { folderNameInput.focus(); folderNameInput.select(); }, 50);
   }
 
   /** Cancel folder dialog */
   folderDialogCancel.addEventListener("click", () => {
     folderDialog.classList.add("hidden");
+    _isRenaming = false;
   });
 
   /** Close folder dialog on Escape */
   folderNameInput.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") folderDialog.classList.add("hidden");
+    if (e.key === "Escape") { folderDialog.classList.add("hidden"); _isRenaming = false; }
     if (e.key === "Enter") folderDialogCreate.click();
   });
 
   /** Close dialog when clicking the overlay background */
   folderDialog.addEventListener("click", (e) => {
-    if (e.target === folderDialog || e.target.classList.contains("dialog-overlay")) folderDialog.classList.add("hidden");
+    if (e.target === folderDialog || e.target.classList.contains("dialog-overlay")) {
+      folderDialog.classList.add("hidden");
+      _isRenaming = false;
+    }
   });
 
-  /** Create folder */
+  /** Create folder / Rename folder */
   folderDialogCreate.addEventListener("click", async () => {
     const name = folderNameInput.value.trim();
     if (!name) {
-      folderDialogErrorText.textContent = "フォルダ名を入力してください";
+      folderDialogErrorText.textContent = _isRenaming
+        ? "新しいフォルダ名を入力してください"
+        : "フォルダ名を入力してください";
       folderDialogError.classList.remove("hidden");
       return;
     }
@@ -326,28 +368,70 @@ const App = (() => {
       return;
     }
 
-    const parentPath = _folderCreationParent;
-    const fullPath = parentPath ? `${parentPath}/${name}` : name;
-
-    try {
-      const res = await fetch("/api/folder", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: fullPath }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        folderDialogErrorText.textContent = data.error || "作成に失敗しました";
-        folderDialogError.classList.remove("hidden");
+    if (_isRenaming) {
+      // ---- Rename mode ----
+      if (name === _renameCurrentName) {
+        folderDialog.classList.add("hidden");
+        _isRenaming = false;
         return;
       }
+      try {
+        const res = await fetch("/api/rename", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: _renameTargetPath, new_name: name }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          folderDialogErrorText.textContent = data.error || "変更に失敗しました";
+          folderDialogError.classList.remove("hidden");
+          return;
+        }
 
-      folderDialog.classList.add("hidden");
-      await Tree.load();
-    } catch (err) {
-      console.error("Create folder error:", err);
-      folderDialogErrorText.textContent = "エラーが発生しました";
-      folderDialogError.classList.remove("hidden");
+        folderDialog.classList.add("hidden");
+        _isRenaming = false;
+
+        // プレビュー中のファイルがリネームしたフォルダ内にあれば再表示
+        const selected = Tree.getSelectedPath();
+        if (selected && (selected === _renameTargetPath || selected.startsWith(_renameTargetPath + "/"))) {
+          const newPath = data.path + selected.slice(_renameTargetPath.length);
+          Preview.showWelcome();
+          await Tree.load();
+          document.dispatchEvent(new CustomEvent("file-selected", { detail: { path: newPath } }));
+          return;
+        }
+
+        await Tree.load();
+      } catch (err) {
+        console.error("Rename folder error:", err);
+        folderDialogErrorText.textContent = "エラーが発生しました";
+        folderDialogError.classList.remove("hidden");
+      }
+    } else {
+      // ---- Create mode ----
+      const parentPath = _folderCreationParent;
+      const fullPath = parentPath ? `${parentPath}/${name}` : name;
+
+      try {
+        const res = await fetch("/api/folder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: fullPath }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          folderDialogErrorText.textContent = data.error || "作成に失敗しました";
+          folderDialogError.classList.remove("hidden");
+          return;
+        }
+
+        folderDialog.classList.add("hidden");
+        await Tree.load();
+      } catch (err) {
+        console.error("Create folder error:", err);
+        folderDialogErrorText.textContent = "エラーが発生しました";
+        folderDialogError.classList.remove("hidden");
+      }
     }
   });
 
