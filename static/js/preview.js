@@ -57,16 +57,29 @@ const Preview = (() => {
     },
   };
 
+  // Custom renderer for headings – attach sequential IDs for TOC anchors
+  // Sequential IDs (heading-1, heading-2, …) are safe for Japanese / any text
+  let _headingCounter = 0;
+  const headingRenderer = {
+    heading(token) {
+      const text  = (typeof token === "object") ? (token.text  || "") : String(arguments[0] || "");
+      const depth = (typeof token === "object") ? (token.depth || 1) : Number(arguments[1] || 1);
+      _headingCounter++;
+      return `<h${depth} id="heading-${_headingCounter}">${text}</h${depth}>\n`;
+    },
+  };
+
   // Apply configuration
   if (markedLib.use) {
     markedLib.use({
       gfm: true,
       breaks: false,
-      renderer: codeRenderer,
+      renderer: { ...codeRenderer, ...headingRenderer },
     });
   } else if (markedLib.setOptions) {
     const renderer = new markedLib.Renderer();
     renderer.code = codeRenderer.code;
+    renderer.heading = headingRenderer.heading;
     markedLib.setOptions({ renderer, gfm: true, breaks: false });
   }
 
@@ -79,13 +92,16 @@ const Preview = (() => {
 
   /* ---- DOM references ---- */
 
-  const welcomeEl = document.getElementById("preview-welcome");
-  const contentEl = document.getElementById("preview-content");
+  const welcomeEl    = document.getElementById("preview-welcome");
+  const contentEl    = document.getElementById("preview-content");
   const breadcrumbEl = document.getElementById("breadcrumb");
-  const previewPane = document.getElementById("preview-pane");
+  const previewScroll = document.getElementById("preview-scroll");
+  const tocSidebar   = document.getElementById("toc-sidebar");
+  const tocNav       = document.getElementById("toc-nav");
 
   /* ---- State ---- */
   let _currentPath = null;
+  let _tocObserver = null;
 
   /* ---- Core ---- */
 
@@ -125,6 +141,8 @@ const Preview = (() => {
   }
 
   function _renderMarkdown(source, filePath) {
+    // Reset heading counter for sequential anchor IDs
+    _headingCounter = 0;
     // Resolve relative image paths
     const basePath = filePath.substring(0, filePath.lastIndexOf("/") + 1);
     const html = markedLib.parse(source);
@@ -144,15 +162,19 @@ const Preview = (() => {
     // Render Mermaid diagrams
     _renderMermaid();
 
+    // Build table of contents
+    _buildTOC();
+
     // Scroll to top
-    previewPane.scrollTop = 0;
+    previewScroll.scrollTop = 0;
   }
 
   function _renderPlainText(text, _filePath) {
     const highlighted = hljs.highlightAuto(text).value;
     contentEl.innerHTML = `<pre><code class="hljs">${highlighted}</code></pre>`;
     _showContent();
-    previewPane.scrollTop = 0;
+    _hideTOC();
+    previewScroll.scrollTop = 0;
   }
 
   function _renderHtml(filePath) {
@@ -167,7 +189,8 @@ const Preview = (() => {
       ></iframe>
     `;
     _showContent();
-    previewPane.scrollTop = 0;
+    _hideTOC();
+    previewScroll.scrollTop = 0;
   }
 
   function _showImage(filePath) {
@@ -178,7 +201,67 @@ const Preview = (() => {
       </div>
     `;
     _showContent();
-    previewPane.scrollTop = 0;
+    _hideTOC();
+    previewScroll.scrollTop = 0;
+  }
+
+  /* ---- TOC (Table of Contents) ---- */
+
+  function _buildTOC() {
+    // Disconnect previous intersection observer
+    if (_tocObserver) {
+      _tocObserver.disconnect();
+      _tocObserver = null;
+    }
+
+    const headings = Array.from(contentEl.querySelectorAll("h2, h3"));
+    if (headings.length < 2) {
+      _hideTOC();
+      return;
+    }
+
+    // Build anchor list (H3 indented relative to H2)
+    tocNav.innerHTML = headings.map((h) => {
+      const isH3 = h.tagName === "H3";
+      return `<a href="#${h.id}" class="toc-item${isH3 ? " toc-item-h3" : ""}" data-toc-id="${h.id}">${h.textContent}</a>`;
+    }).join("");
+
+    // Smooth scroll on click
+    tocNav.querySelectorAll("a.toc-item").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        const target = document.getElementById(a.dataset.tocId);
+        if (target) target.scrollIntoView({ behavior: "smooth" });
+      });
+    });
+
+    // Highlight active heading via IntersectionObserver
+    _tocObserver = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((en) => en.isIntersecting);
+        if (!visible.length) return;
+        // Highlight the topmost visible heading
+        const topEntry = visible.reduce((a, b) =>
+          a.boundingClientRect.top < b.boundingClientRect.top ? a : b
+        );
+        tocNav.querySelectorAll("a.toc-item").forEach((a) => a.classList.remove("toc-active"));
+        const activeLink = tocNav.querySelector(`a[data-toc-id="${topEntry.target.id}"]`);
+        if (activeLink) activeLink.classList.add("toc-active");
+      },
+      { root: previewScroll, rootMargin: "-80px 0px -50% 0px", threshold: 0 }
+    );
+    headings.forEach((h) => _tocObserver.observe(h));
+
+    tocSidebar.classList.remove("hidden");
+  }
+
+  function _hideTOC() {
+    if (_tocObserver) {
+      _tocObserver.disconnect();
+      _tocObserver = null;
+    }
+    tocSidebar.classList.add("hidden");
+    tocNav.innerHTML = "";
   }
 
   async function _renderMermaid() {
@@ -430,6 +513,7 @@ const Preview = (() => {
     welcomeEl.classList.remove("hidden");
     contentEl.classList.add("hidden");
     breadcrumbEl.classList.add("hidden");
+    _hideTOC();
     _currentPath = null;
   }
 

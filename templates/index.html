@@ -20,7 +20,7 @@
   <script src="/static/vendor/mermaid.min.js"></script>
 
   <!-- App styles -->
-  <link rel="stylesheet" href="/static/css/style.css?v=2" />
+  <link rel="stylesheet" href="/static/css/style.css?v=3" />
 </head>
 
 <body class="h-full bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 overflow-hidden">
@@ -133,7 +133,8 @@
     <div id="resize-handle" class="w-1 cursor-col-resize hover:bg-blue-400/40 active:bg-blue-500/50 transition-colors hidden md:block shrink-0"></div>
 
     <!-- Right pane – preview -->
-    <main id="preview-pane" class="flex-1 overflow-y-auto">
+    <main id="preview-pane" class="flex-1 flex overflow-hidden">
+      <div id="preview-scroll" class="flex-1 overflow-y-auto min-w-0">
       <!-- Upload progress -->
       <div id="upload-progress" class="hidden px-6 py-3">
         <div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
@@ -163,6 +164,15 @@
       <!-- Skill detail pane -->
       <div id="skill-detail-pane" class="hidden overflow-y-auto">
       </div>
+      </div><!-- /#preview-scroll -->
+
+      <!-- TOC sidebar -->
+      <aside id="toc-sidebar" class="hidden w-56 shrink-0 overflow-y-auto border-l border-gray-200 dark:border-gray-700">
+        <div class="sticky top-0 pt-6 pb-4 px-4 w-full overflow-hidden">
+          <p class="toc-heading">目次</p>
+          <nav id="toc-nav" class="toc-nav"></nav>
+        </div>
+      </aside>
     </main>
   </div>
 
