@@ -368,7 +368,7 @@ const Preview = (() => {
 
   function _showBreadcrumb(filePath) {
     const parts = filePath.split("/");
-    breadcrumbEl.innerHTML = parts
+    const pathHtml = parts
       .map((p, i) => {
         const isLast = i === parts.length - 1;
         return isLast
@@ -376,6 +376,25 @@ const Preview = (() => {
           : `<span>${_esc(p)}</span><span class="mx-1 text-gray-300 dark:text-gray-600">/</span>`;
       })
       .join("");
+    breadcrumbEl.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div class="flex items-center min-w-0 overflow-hidden flex-wrap gap-y-0.5">${pathHtml}</div>
+        <button class="breadcrumb-copy-btn shrink-0 ml-3 p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="リンクをコピー">
+          <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
+        </button>
+      </div>
+    `;
+    const copyBtn = breadcrumbEl.querySelector(".breadcrumb-copy-btn");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", () => {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+          copyBtn.innerHTML = `<svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>`;
+          setTimeout(() => {
+            copyBtn.innerHTML = `<svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>`;
+          }, 2000);
+        });
+      });
+    }
     breadcrumbEl.classList.remove("hidden");
   }
 
@@ -423,6 +442,7 @@ const Preview = (() => {
   /* ---- Event listeners ---- */
 
   document.addEventListener("file-selected", (e) => {
+    history.replaceState(null, "", "#docs/" + e.detail.path);
     showFile(e.detail.path);
   });
 

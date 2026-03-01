@@ -138,8 +138,14 @@ const App = (() => {
     }
   }
 
-  tabDocs.addEventListener("click", () => _switchMode("docs"));
-  tabSkills.addEventListener("click", () => _switchMode("skills"));
+  tabDocs.addEventListener("click", () => {
+    _switchMode("docs");
+    history.replaceState(null, "", "#docs");
+  });
+  tabSkills.addEventListener("click", () => {
+    _switchMode("skills");
+    history.replaceState(null, "", "#skills");
+  });
 
   /* ==================================================================
    *  Skill upload
@@ -750,6 +756,24 @@ const App = (() => {
 
   // Also load skills in background for quick tab switching
   Skills.load();
+
+  // Restore state from URL hash (for direct link sharing)
+  const _initialHash = window.location.hash;
+  if (_initialHash.startsWith("#docs/")) {
+    const filePath = decodeURIComponent(_initialHash.slice("#docs/".length));
+    document.dispatchEvent(new CustomEvent("file-selected", { detail: { path: filePath } }));
+  } else if (_initialHash.startsWith("#skills/")) {
+    const rest = _initialHash.slice("#skills/".length);
+    const slashIdx = rest.indexOf("/");
+    if (slashIdx !== -1) {
+      const author = decodeURIComponent(rest.slice(0, slashIdx));
+      const skillName = decodeURIComponent(rest.slice(slashIdx + 1));
+      _switchMode("skills");
+      Skills.selectByName(author, skillName);
+    }
+  } else if (_initialHash === "#skills") {
+    _switchMode("skills");
+  }
 
   return { toggleSidebar, switchMode: _switchMode };
 })();
