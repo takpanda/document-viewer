@@ -495,6 +495,21 @@ def upload_skill():
 
     skill_dir = _safe_skill_path(author, skill_name)
 
+    # Preserve metadata from existing entry (likes, version, uploaded_at)
+    existing_metadata = _load_metadata()
+    existing_entry = next(
+        (s for s in existing_metadata if s["author"] == author and s["skill_name"] == skill_name),
+        None,
+    )
+    prev_likes = existing_entry.get("likes", 0) if existing_entry else 0
+    prev_version = existing_entry.get("version", 1) if existing_entry else 0
+    prev_uploaded_at = existing_entry.get("uploaded_at") if existing_entry else None
+    is_update = existing_entry is not None
+
+    # Clean up existing skill directory to remove stale files from old versions
+    if skill_dir.is_dir():
+        shutil.rmtree(skill_dir)
+
     # Save files
     saved = 0
     for file_storage, rel_path in zip(files, paths):
@@ -527,18 +542,24 @@ def upload_skill():
     metadata = _load_metadata()
     # Remove existing entry with same author/name
     metadata = [s for s in metadata if not (s["author"] == author and s["skill_name"] == skill_name)]
+    now = datetime.now(timezone.utc).isoformat()
+    new_version = prev_version + 1 if is_update else 1
     entry = {
         "author": author,
         "skill_name": skill_name,
         "name": fm.get("name", skill_name),
         "description": fm.get("description", ""),
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_at": prev_uploaded_at or now,
+        "updated_at": now,
+        "version": new_version,
+        "likes": prev_likes,
         "files": _collect_files(skill_dir),
     }
     metadata.append(entry)
     _save_metadata(metadata)
 
-    return jsonify({"message": f"スキル '{skill_name}' をアップロードしました", "skill": entry}), 201
+    action = "更新" if is_update else "アップロード"
+    return jsonify({"message": f"スキル '{skill_name}' を{action}しました (v{new_version})", "skill": entry}), 201
 
 
 @app.route("/api/skills/<author>/<name>", methods=["GET"])
