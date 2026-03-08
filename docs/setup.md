@@ -25,6 +25,15 @@ docker compose up --build
 http://localhost:8080
 ```
 
+- Web UI: `http://localhost:8080`
+- MCP endpoint: `http://localhost:8081/mcp`
+
+> **補足**
+> FastMCP の Streamable HTTP endpoint を `curl` などで監視する場合は、
+> `Content-Type: application/json` に加えて
+> `Accept: application/json, text/event-stream` が必要です。
+> さらに、空の JSON (`{}`) ではなく有効な JSON-RPC リクエストを送ってください。
+
 ## 使い方
 
 1. 画面右上の **「フォルダ選択」** ボタンをクリック

@@ -49,9 +49,11 @@ docker compose up --build
 - Web UI: **http://localhost:8080**
 - MCP エンドポイント: **http://localhost:8081/mcp**
 
-※Docker コンテナの `healthcheck` は POST リクエストに
-`Content-Type: application/json` を付け、空の JSON ボディを送信する
-必要があります。設定が不適切だと 400 Bad Request が出力されます。
+※FastMCP の Streamable HTTP エンドポイントを `healthcheck` する場合は、
+`Content-Type: application/json` に加えて
+`Accept: application/json, text/event-stream` を付与し、
+**空の JSON (`{}`) ではなく有効な JSON-RPC リクエスト** を送る必要があります。
+空の JSON だと 400 Bad Request になります。
 
 ### ローカル開発
 
@@ -105,11 +107,20 @@ Streamable HTTP トランスポートで動作し、`http://localhost:8081/mcp` 
 
 > **ヘルスチェックに関する補足**
 >
-> FastMCP はストリーム可能 HTTP トランスポートで動作し、
-> POST リクエストに `Content-Type` ヘッダーが無いと 400 を返します。
-> Docker の `healthcheck` や外部モニタは必ず `-H "Content-Type: application/json"` と
-> `-d '{}'` を付けてください。
-
+> FastMCP は Streamable HTTP トランスポートで動作するため、
+> `Content-Type: application/json` だけでなく
+> `Accept: application/json, text/event-stream` も必要です。
+> また、`{}` のような空 JSON ではなく、`initialize` などの
+> **有効な JSON-RPC リクエスト** を送ってください。
+>
+> 例:
+>
+> ```bash
+> curl -X POST http://localhost:8081/mcp \
+>   -H "Content-Type: application/json" \
+>   -H "Accept: application/json, text/event-stream" \
+>   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"healthcheck","version":"1.0"}}}'
+> ```
 
 | Tool | 説明 | パラメータ |
 |------|------|------------|
