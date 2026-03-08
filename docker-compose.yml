@@ -33,13 +33,13 @@ services:
     restart: unless-stopped
     command: ["python", "mcp_server.py"]
     healthcheck:
-      # curl must include a Content-Type header and a (possibly empty) JSON body
-      # so that FastMCP’s streamable HTTP transport doesn’t reject the request.
-      test: |
-        CMD curl -f -X POST \
-          -H "Content-Type: application/json" \
-          -d '{}' \
-          http://localhost:8081/mcp || exit 1
+      # FastMCP's Streamable HTTP endpoint requires an Accept header that includes
+      # both application/json and text/event-stream, and a valid JSON-RPC request.
+      test:
+        [
+          "CMD-SHELL",
+          "printf '%s' '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"capabilities\":{},\"clientInfo\":{\"name\":\"healthcheck\",\"version\":\"1.0\"}}}' | curl -fsS -X POST http://localhost:8081/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' --data-binary @- >/dev/null"
+        ]
       interval: 30s
       timeout: 5s
       start_period: 10s
