@@ -33,8 +33,8 @@ services:
     restart: unless-stopped
     command: ["python", "mcp_server.py"]
     healthcheck:
-      # FastMCP's Streamable HTTP endpoint requires both Accept headers and a
-      # valid JSON-RPC request. An empty JSON body returns 400.
+      # FastMCP's Streamable HTTP endpoint requires an Accept header that includes
+      # both application/json and text/event-stream, and a valid JSON-RPC request.
       test:
         [
           "CMD-SHELL",
