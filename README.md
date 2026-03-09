@@ -163,6 +163,24 @@ Streamable HTTP トランスポートで動作し、`http://localhost:8081/mcp` 
 }
 ```
 
+## API テスト
+
+中核 API のスモークテストは `pytest` で実行できます。
+
+```bash
+pytest -q
+```
+
+このテストでは主に以下を確認します。
+
+- `/health`
+- `/api/upload`
+- `/api/tree`
+- `/api/file/<path>`
+- `/api/folder`
+
+GitHub Actions でも pull request ごとに自動実行されます。
+
 ## End-to‑End テスト (Playwright CLI)
 
 このプロジェクトでは [Playwright CLI](https://github.com/microsoft/playwright-cli) を使ってブラウザの自動化やエンドツーエンドのテストができます。

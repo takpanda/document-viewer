@@ -65,6 +65,14 @@ pip install -r requirements.txt
 python app.py
 ```
 
+### API テスト
+
+中核 API のスモークテストは `pytest` で実行できます。
+
+```bash
+pytest -q
+```
+
 ### エンドツーエンドテスト
 
 Playwright CLI を利用した E2E テスト環境を用意しています。Node.js 18 以上が必要です。
