@@ -344,7 +344,6 @@
 .markdown-body .mermaid svg {
   display: block;
   transform-origin: 0 0;
-  will-change: transform;
 }
 
 /* Mermaid zoom toolbar */

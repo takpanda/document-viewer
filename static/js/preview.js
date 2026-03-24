@@ -324,20 +324,33 @@ const Preview = (() => {
       let lastTouchDist = null;
       let lastTouchMidX = 0, lastTouchMidY = 0;
 
+      // SVG の元サイズを viewBox から取得（ベクター品質を保つ拡縮のベースとして使用）
+      const vb = svg.viewBox.baseVal;
+      function _svgOrigDim(vbVal, attr) {
+        return vbVal || parseFloat(svg.getAttribute(attr)) || svg.getBoundingClientRect()[attr];
+      }
+      const origW = _svgOrigDim(vb && vb.width,  "width");
+      const origH = _svgOrigDim(vb && vb.height, "height");
+
+      // mermaid が設定する max-width 制約を解除し、width/height を自前で管理する
+      svg.style.maxWidth = "none";
+
       // Fit SVG to container width if it overflows
-      const svgW = svg.getBoundingClientRect().width || svg.viewBox.baseVal.width || 0;
       const containerW = container.clientWidth - 32;
-      if (svgW > 0 && svgW > containerW) {
-        scale = containerW / svgW;
+      if (origW > 0 && origW > containerW) {
+        scale = containerW / origW;
       }
       applyTransform();
 
       function clamp(v, min, max) { return Math.min(Math.max(v, min), max); }
 
       function applyTransform() {
-        svg.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
-        const svgNativeH = svg.viewBox.baseVal.height || svg.getBoundingClientRect().height / scale;
-        container.style.minHeight = (svgNativeH * scale + 32) + "px";
+        // CSS scale() ではなく width/height を直接変更することで SVG をベクターとして再レンダリングし、
+        // 拡大時にボヤけが生じないようにする
+        if (origW > 0) svg.style.width  = (origW * scale) + "px";
+        if (origH > 0) svg.style.height = (origH * scale) + "px";
+        svg.style.transform = `translate(${tx}px, ${ty}px)`;
+        container.style.minHeight = (origH * scale + 32) + "px";
       }
 
       function zoomAt(clientX, clientY, factor) {
